@@ -1,0 +1,40 @@
+{
+  "name": "secret-words",
+  "version": "0.0.1",
+  "description": "A Secret Words game to play when you're stuck at home and so are all your friends",
+  "main": "src/index.html",
+  "dependencies": {
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1",
+    "worker-loader": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^25.1.4",
+    "@types/react": "^16.9.25",
+    "@types/react-dom": "^16.9.5",
+    "concurrently": "^5.1.0",
+    "jest": "^25.1.0",
+    "parcel-bundler": "^1.12.4",
+    "ts-jest": "^25.2.1",
+    "typescript": "^3.8.3"
+  },
+  "scripts": {
+    "dev": "concurrently -r \"npm:type-check:watch\" \"npm:start\"",
+    "start": "parcel ./src/index.html",
+    "build": "npm run type-check && parcel build ./src/index.html --public-url '/'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --noEmit --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jesseditson/secret-words.git"
+  },
+  "author": "Jesse Ditson <jesse.ditson@gmail.com>",
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/jesseditson/secret-words/issues"
+  },
+  "homepage": "https://github.com/jesseditson/secret-words#readme"
+}
