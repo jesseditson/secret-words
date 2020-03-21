@@ -1,0 +1,38 @@
+{
+  "name": "secret-words",
+  "version": "1.0.0",
+  "description": "A Secret Words Guessing Game",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jesseditson/secret-words.git"
+  },
+  "author": "Jesse Ditson <jesse.ditson@gmail.com>",
+  "license": "Unlicense",
+  "bugs": {
+    "url": "https://github.com/jesseditson/secret-words/issues"
+  },
+  "homepage": "https://github.com/jesseditson/secret-words#readme",
+  "dependencies": {
+    "aws-sdk": "^2.619.0",
+    "isomorphic-unfetch": "^3.0.0",
+    "next": "^9.2.1",
+    "react": "^16.7.0",
+    "react-dom": "^16.7.0",
+    "swr": "^0.1.17"
+  },
+  "devDependencies": {
+    "@now/node": "^1.4.1",
+    "@types/node": "^13.7.1",
+    "@types/react": "^16.9.19",
+    "now": "^16.6.0",
+    "typescript": "^3.7.5"
+  },
+  "engines": {
+    "node": "^13.7"
+  }
+}

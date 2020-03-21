@@ -1,0 +1,8 @@
+{
+    "version": 2,
+    "name": "secret-words",
+    "env": {
+        "AWS_KEY": "@secret-words-aws-key",
+        "AWS_SECRET": "@secret-words-aws-secret"
+    }
+}
