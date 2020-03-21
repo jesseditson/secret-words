@@ -18,12 +18,14 @@
   },
   "homepage": "https://github.com/jesseditson/secret-words#readme",
   "dependencies": {
+    "@zeit/next-workers": "^1.0.0",
     "aws-sdk": "^2.619.0",
     "isomorphic-unfetch": "^3.0.0",
     "next": "^9.2.1",
     "react": "^16.7.0",
     "react-dom": "^16.7.0",
-    "swr": "^0.1.17"
+    "swr": "^0.1.17",
+    "worker-loader": "^2.0.0"
   },
   "devDependencies": {
     "@now/node": "^1.4.1",

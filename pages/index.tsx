@@ -2,26 +2,35 @@ import Layout from "../components/layout";
 import { NextPage } from "next";
 import useSWR from "swr";
 import fetcher, { isomorphicFetcher } from "../lib/api";
+import { GameWorker } from "./api/games";
 
 interface HomeProps {
-  data: { hello: string };
+  games: GameWorker[];
 }
 
 const Home: NextPage<HomeProps> = props => {
-  const initialData = props.data;
-  const { data, error } = useSWR("/api/data", fetcher, { initialData });
+  const initialData = {games: props.games};
+  const { data, error } = useSWR<{games: GameWorker[]}>("/api/games", fetcher, { initialData });
+  const {games} = data || {}
   return (
-    <Layout>
-      <h1>Secret Words</h1>
-      <span>{data && data.hello}</span>
-      <style jsx>{``}</style>
+    <Layout error={error}>
+      <ul>
+        {games && games.map(game => 
+          <li key={game.id} className="game">
+            <a href={`/game/${game.id}`}>{game.name}</a>
+          </li>
+        )}
+      </ul>
+      <style jsx>{`
+        
+      `}</style>
     </Layout>
   );
 };
 
 Home.getInitialProps = async ctx => {
-  const data = await isomorphicFetcher(ctx.req?.headers)("/api/data");
-  return { data };
+  const {games} = await isomorphicFetcher(ctx.req?.headers)("/api/games");
+  return { games };
 };
 
 export default Home;
