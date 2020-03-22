@@ -11,7 +11,11 @@ export enum Op {
     SHOW_GAME = "Show Game",
     HIDE_GAME = "Hide Game",
     CHANGE_TEAM = "Change Team",
-    START_GAME = "Start Game"
+    MAKE_HINTER = "Make Hinter",
+    START_GAME = "Start Game",
+    SET_GUESS_COUNT = "Set Guess Count",
+    GUESS_TILE = "Guess Tile",
+    FINISH_GUESSING = "Finish Guessing"
 }
 
 export interface MessageData {

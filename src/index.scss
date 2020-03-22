@@ -1,0 +1,15 @@
+.tile {
+    border: 2px solid transparent;
+    &.red {
+        border-color: red;
+    }
+    &.blue {
+        border-color: blue;
+    }
+    &.neutral {
+        border-color: burlywood;
+    }
+    &.death {
+        border-color: black;
+    }
+}

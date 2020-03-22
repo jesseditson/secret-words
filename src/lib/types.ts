@@ -23,6 +23,8 @@ export interface Game {
     blueHinter?: string
     redHinter?: string
     state: GameState
+    isGuessing: boolean
+    guessesRemaining: number
     turn: Team
 }
 
@@ -51,6 +53,7 @@ export interface AppState {
     initialized: boolean
     games: Game[]
     currentUser?: User
+    currentTeam?: Team
     currentGame?: Game
     currentPlayers?: Map<string, User>
     currentGameTiles?: Tile[]

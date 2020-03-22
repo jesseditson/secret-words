@@ -120,6 +120,13 @@ export const App: FunctionComponent<AppProps> = ({
                             team
                         })
                     }
+                    onSetHinter={(playerId, team) =>
+                        sendMessage(Op.MAKE_HINTER, {
+                            gameId: appState.currentGame?._id,
+                            playerId,
+                            team
+                        })
+                    }
                     onComplete={() =>
                         sendMessage(Op.START_GAME, {
                             gameId: appState.currentGame?._id
@@ -132,6 +139,24 @@ export const App: FunctionComponent<AppProps> = ({
                     game={appState.currentGame!}
                     user={appState.currentUser!}
                     tiles={appState.currentGameTiles!}
+                    userTeam={appState.currentTeam!}
+                    onGuess={tile =>
+                        sendMessage(Op.GUESS_TILE, {
+                            tileId: tile._id,
+                            gameId: appState.currentGame!._id
+                        })
+                    }
+                    onSetGuessCount={count =>
+                        sendMessage(Op.SET_GUESS_COUNT, {
+                            count,
+                            gameId: appState.currentGame!._id
+                        })
+                    }
+                    onFinishGuessing={() =>
+                        sendMessage(Op.FINISH_GUESSING, {
+                            gameId: appState.currentGame!._id
+                        })
+                    }
                 />
             )}
         </div>

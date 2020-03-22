@@ -5,6 +5,7 @@ interface ChooseTeamsProps {
     game: Game
     players: Map<string, User>
     onChooseTeam: (playerId: string, team: Team) => void
+    onSetHinter: (playerId: string, team: Team) => void
     onComplete: () => void
 }
 
@@ -19,18 +20,27 @@ export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
     game,
     players,
     onChooseTeam,
+    onSetHinter,
     onComplete
 }) => {
     const blueIds = new Set(game.blueIds)
     const redIds = new Set(game.redIds)
     const playerIf = (team: Team, id: string) => {
         const player = players.get(id)
+        const isHinter =
+            player && (game.blueHinter === id || game.redHinter === id)
+        const playerContent = (
+            <span onClick={() => onSetHinter(id, team)}>
+                {player?.name}
+                {isHinter ? " (*)" : ""}
+            </span>
+        )
         if (team === Team.BLUE && blueIds.has(id)) {
-            return player?.name
+            return playerContent
         } else if (team === Team.RED && redIds.has(id)) {
-            return player?.name
+            return playerContent
         } else if (team === Team.NONE && !blueIds.has(id) && !redIds.has(id)) {
-            return player?.name
+            return playerContent
         }
         return <button onClick={() => onChooseTeam(id, team)}>Choose</button>
     }
