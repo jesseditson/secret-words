@@ -2,6 +2,7 @@ import React, { FunctionComponent, useState } from "react"
 import classNames from "classnames"
 import { Game, User, Tile, Team, GameState } from "../lib/types"
 import getLogger from "debug"
+import { countTilesLeft, getWinner } from "../lib/util"
 const debug = getLogger("secret-words:game-board")
 
 interface GameBoardProps {
@@ -17,12 +18,14 @@ interface GameBoardProps {
 interface TilesProps {
     tiles: Tile[]
     showTeams: boolean
+    isGuessing: boolean
     onClickTile: (tile: Tile) => void
 }
 
 const Tiles: FunctionComponent<TilesProps> = ({
     tiles,
     showTeams,
+    isGuessing,
     onClickTile
 }) => {
     const rows: Tile[][] = tiles.reduce(
@@ -42,13 +45,18 @@ const Tiles: FunctionComponent<TilesProps> = ({
                 {rows.map((row, idx) => (
                     <tr key={`row:${idx}`}>
                         {row.map(tile => {
-                            const showColor =
-                                showTeams || tile.guessedBy !== undefined
+                            const isGuessed = tile.guessedBy !== undefined
+                            const showColor = showTeams || isGuessed
                             return (
                                 <td
                                     key={tile._id}
-                                    onClick={() => onClickTile(tile)}
+                                    onClick={() =>
+                                        isGuessing ? onClickTile(tile) : null
+                                    }
                                     className={classNames("tile", {
+                                        clickable: isGuessing,
+                                        guessed: isGuessed,
+                                        showing: showTeams,
                                         red:
                                             showColor && tile.team === Team.RED,
                                         neutral:
@@ -83,27 +91,49 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
     onFinishGuessing
 }) => {
     const [guessCount, setGuessCount] = useState(1)
-    const isHinter =
-        (userTeam === Team.RED && game.redHinter === user._id) ||
-        (userTeam === Team.BLUE && game.blueHinter === user._id)
+    const isFinished = game.state === GameState.FINISHED
     const isPlayer = userTeam !== Team.NONE
+    let isHinter = false
+    if (userTeam === Team.RED && game.redHinter === user._id) {
+        console.log("is red hinter", userTeam, game, user)
+        isHinter = true
+    } else if (userTeam === Team.BLUE && game.blueHinter === user._id) {
+        console.log("is blue hinter", userTeam, game, user)
+        isHinter = true
+    }
+    const isGuesser = isPlayer && !isHinter
     const isTeamTurn = isPlayer && game.turn === userTeam
-    const isHinterTurn = isTeamTurn && isHinter && !game.isGuessing
-    const isGuesserTurn = isTeamTurn && !isHinterTurn
-    const isOpponentTurn = isPlayer && !isTeamTurn
+    const isHinting = !isFinished && isTeamTurn && !game.isGuessing
+    const isGuessing = !isFinished && isTeamTurn && game.isGuessing
     const guessDesc =
         game.guessesRemaining === 1
             ? "1 guess"
             : `${game.guessesRemaining} guesses`
-    debug("is player", isPlayer)
-    debug("is team turn", isTeamTurn)
-    debug("is hinter turn", isHinterTurn)
-    debug("is guesser turn", isGuesserTurn)
-    debug("is opponent turn", isOpponentTurn)
+    const redTilesRemaining = countTilesLeft(tiles, Team.RED)
+    const blueTilesRemaining = countTilesLeft(tiles, Team.BLUE)
+    const teamTilesRemaining =
+        userTeam === Team.RED ? redTilesRemaining : blueTilesRemaining
+    const desc = (color: string, count: number, prefix: boolean = false) =>
+        count === 1
+            ? `${prefix ? "is " : ""}1 ${color} tile`
+            : `${prefix ? "are " : ""}${count} ${color} tiles`
+
     return (
         <div id="game">
             <h2>{game.name}</h2>
-            {isHinterTurn ? (
+            {isPlayer ? (
+                <div className="game-info">
+                    <p>
+                        You are {isHinter ? "the Hinter" : "a Guesser"} on team{" "}
+                        {userTeam}
+                    </p>
+                    <p>
+                        There {desc("blue", blueTilesRemaining, true)} and{" "}
+                        {desc("red", redTilesRemaining)} left.
+                    </p>
+                </div>
+            ) : null}
+            {isHinter && isHinting ? (
                 <div className="hinter-info">
                     <p>
                         {
@@ -121,7 +151,7 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
                             <input
                                 type="number"
                                 min="1"
-                                max="7"
+                                max={`${teamTilesRemaining}`}
                                 step="1"
                                 value={guessCount}
                                 onChange={e =>
@@ -133,8 +163,20 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
                     </form>
                 </div>
             ) : null}
-            {isGuesserTurn ? (
+            {isHinter && isGuessing ? (
                 <div className="hinter-info">
+                    <p>
+                        {`Your team is guessing. They have ${guessDesc} left.`}
+                    </p>
+                </div>
+            ) : null}
+            {isGuesser && isHinting ? (
+                <div className="guesser-info">
+                    <p>{`Your hinter is coming up with a word.`}</p>
+                </div>
+            ) : null}
+            {isGuesser && isGuessing ? (
+                <div className="guesser-info">
                     <p>
                         {`Click a word to guess. You have ${guessDesc} left.`}
                     </p>
@@ -143,13 +185,12 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
                     </button>
                 </div>
             ) : null}
-            {game.state !== GameState.FINISHED &&
-            (isOpponentTurn || !isPlayer) ? (
+            {!isFinished && (!isTeamTurn || !isPlayer) ? (
                 <div className="player-info">
                     <p>
-                        {isOpponentTurn
+                        {isPlayer
                             ? "Opponent's turn."
-                            : `${userTeam} team's turn.`}
+                            : `${game.turn} team's turn.`}
                     </p>
                     <p>
                         {game.isGuessing
@@ -158,15 +199,24 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
                     </p>
                 </div>
             ) : null}
-            {game.state === GameState.FINISHED ? (
+            {isFinished ? (
                 <div className="finished-info">
                     <p>Game Complete!</p>
+                    <p>
+                        Winner: Team{" "}
+                        {getWinner(
+                            tiles,
+                            redTilesRemaining,
+                            blueTilesRemaining
+                        )}
+                    </p>
                 </div>
             ) : null}
             <div className="board">
                 <Tiles
                     tiles={tiles}
-                    showTeams={isHinter}
+                    isGuessing={isGuessing}
+                    showTeams={isHinter || isFinished}
                     onClickTile={tile => onGuess(tile)}
                 />
             </div>

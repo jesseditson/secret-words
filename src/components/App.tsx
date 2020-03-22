@@ -13,36 +13,6 @@ interface AppProps {
     userId?: string
 }
 
-const stateFromMessage = (
-    msg: GameMessageEvent<any>,
-    currentState: AppState
-): Partial<AppState> | void => {
-    const { op, data } = msg.data
-    switch (op) {
-        case Op.UPDATE_STATE:
-            return data
-        case Op.GAME_CHANGED:
-            const newState = { games: [...currentState.games] }
-            let found = false
-            for (const [idx, game] of currentState.games.entries()) {
-                if (game._id === data._id) {
-                    newState.games[idx] = data
-                    found = true
-                    break
-                }
-            }
-            if (!found) {
-                newState.games.push(data)
-            }
-            return newState
-        case Op.USER_CHANGED:
-            if (data._id === currentState.currentUser?._id) {
-                return { currentUser: data }
-            }
-            break
-    }
-}
-
 const GAME_MATCH = /\/game\/([\w-]+)/i
 
 export const App: FunctionComponent<AppProps> = ({
@@ -56,13 +26,9 @@ export const App: FunctionComponent<AppProps> = ({
     })
     useEffect(() => {
         worker.onmessage = async (msg: GameMessageEvent<AppMessage>) => {
-            setAppState(cs => {
-                const newState = stateFromMessage(msg, cs)
-                if (newState) {
-                    return { ...cs, ...newState }
-                }
-                return cs
-            })
+            if (msg.data.op === Op.UPDATE_STATE) {
+                setAppState(cs => ({ ...cs, ...msg.data.data }))
+            }
         }
         sendMessage(Op.INITIALIZE, { userId })
     }, [worker, userId])
@@ -83,11 +49,16 @@ export const App: FunctionComponent<AppProps> = ({
     return (
         <div id="app">
             <h1>Secret Words</h1>
-            {appState.currentGame && (
-                <Link href="/" onClick={() => sendMessage(Op.HIDE_GAME)}>
-                    Back to Games
-                </Link>
-            )}
+            <p>
+                {appState.currentUser && (
+                    <span>{appState.currentUser.name} - </span>
+                )}
+                {appState.currentGame && (
+                    <Link href="/" onClick={() => sendMessage(Op.HIDE_GAME)}>
+                        Back to Games
+                    </Link>
+                )}
+            </p>
             {!appState.currentUser && (
                 <Login
                     onCreateUser={name => sendMessage(Op.CREATE_USER, { name })}
@@ -134,31 +105,32 @@ export const App: FunctionComponent<AppProps> = ({
                     }
                 />
             )}
-            {appState.currentGame?.state === GameState.STARTED && (
-                <GameBoard
-                    game={appState.currentGame!}
-                    user={appState.currentUser!}
-                    tiles={appState.currentGameTiles!}
-                    userTeam={appState.currentTeam!}
-                    onGuess={tile =>
-                        sendMessage(Op.GUESS_TILE, {
-                            tileId: tile._id,
-                            gameId: appState.currentGame!._id
-                        })
-                    }
-                    onSetGuessCount={count =>
-                        sendMessage(Op.SET_GUESS_COUNT, {
-                            count,
-                            gameId: appState.currentGame!._id
-                        })
-                    }
-                    onFinishGuessing={() =>
-                        sendMessage(Op.FINISH_GUESSING, {
-                            gameId: appState.currentGame!._id
-                        })
-                    }
-                />
-            )}
+            {appState.currentGame &&
+                appState.currentGame.state !== GameState.NEW && (
+                    <GameBoard
+                        game={appState.currentGame!}
+                        user={appState.currentUser!}
+                        tiles={appState.currentGameTiles!}
+                        userTeam={appState.currentTeam!}
+                        onGuess={tile =>
+                            sendMessage(Op.GUESS_TILE, {
+                                tileId: tile._id,
+                                gameId: appState.currentGame!._id
+                            })
+                        }
+                        onSetGuessCount={count =>
+                            sendMessage(Op.SET_GUESS_COUNT, {
+                                count,
+                                gameId: appState.currentGame!._id
+                            })
+                        }
+                        onFinishGuessing={() =>
+                            sendMessage(Op.FINISH_GUESSING, {
+                                gameId: appState.currentGame!._id
+                            })
+                        }
+                    />
+                )}
         </div>
     )
 }

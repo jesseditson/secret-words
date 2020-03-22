@@ -1,5 +1,12 @@
 .tile {
     border: 2px solid transparent;
+    cursor: not-allowed;
+    &.showing:not(.guessed) {
+        opacity: 0.3;
+    }
+    &.clickable {
+        cursor: pointer;
+    }
     &.red {
         border-color: red;
     }

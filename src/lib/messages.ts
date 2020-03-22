@@ -5,8 +5,6 @@ export enum Op {
     UPDATE_STATE = "Update State",
     CREATE_GAME = "Create Game",
     DELETE_GAME = "Delete Game",
-    GAME_CHANGED = "Game Change",
-    USER_CHANGED = "User Change",
     JOIN_GAME = "Join Game",
     SHOW_GAME = "Show Game",
     HIDE_GAME = "Hide Game",

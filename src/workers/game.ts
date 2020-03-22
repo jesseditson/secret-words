@@ -12,6 +12,7 @@ import {
 import { v4 as uuid } from "uuid"
 import dictionary from "../data/dictionary.json"
 import getLogger from "debug"
+import { countTilesLeft, getWinner } from "../lib/util"
 const debug = getLogger("secret-words:game")
 
 // Debugging
@@ -19,7 +20,7 @@ if (process.env.NODE_ENV !== "production") {
     // @ts-ignore
     import("pouchdb-debug").then(pouchdbDebug => {
         PouchDB.plugin(pouchdbDebug.default)
-        PouchDB.debug.enable("*")
+        // PouchDB.debug.enable("*")
     })
 }
 
@@ -34,16 +35,9 @@ const ctx: Worker = self as any
 // Setup DBs - we only set these up to pull live,
 // since we know when to push (after an action)
 const gameDb = new PouchDB(`${DB_PREFIX}:games`)
-gameDb.replicate.from(`${REMOTE_URL}/games`, { live: true, retry: true })
 const tileDb = new PouchDB(`${DB_PREFIX}:tiles`)
-tileDb.replicate.from(`${REMOTE_URL}/tiles`, { live: true, retry: true })
 const userDb = new PouchDB(`${DB_PREFIX}:users`)
-userDb.replicate.from(`${REMOTE_URL}/users`, { live: true, retry: true })
 const sessionDb = new PouchDB(`${DB_PREFIX}:sessions`)
-sessionDb.replicate.from(`${REMOTE_URL}/sessions`, { live: true, retry: true })
-
-// Globals
-const changeListeners: Map<string, PouchDB.Core.Changes<any>> = new Map()
 
 // Helpers
 const allow404 = <T = any>(op: Promise<T>): Promise<T | undefined> => {
@@ -88,6 +82,13 @@ const tileList = (gameId: string) => {
     }
     return tileIds
 }
+const allTiles = (gameId: string) =>
+    allDocs(
+        tileDb.allDocs<Tile>({
+            include_docs: true,
+            keys: tileList(gameId).map(({ _id }) => _id)
+        })
+    )
 
 // State management
 let lastState: AppState = { games: [], initialized: false }
@@ -99,53 +100,25 @@ const getState = async (userId: string): Promise<AppState> => {
         ),
         allow404(userDb.get<User>(userId))
     ])
-    const changeOpts = { since: "now", live: true, include_docs: true }
-    const refreshState = (triggerName: string) => async () => {
-        debug(`${triggerName} change notified`)
-        const newState = await getState(userId)
-        ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
-    }
-    // User
-    if (userId && lastState.currentUser?._id !== userId) {
-        changeListeners.get("user")?.cancel()
-        changeListeners.set(
-            "user",
-            userDb
-                .changes({ ...changeOpts, doc_ids: [userId] })
-                .on("change", change =>
-                    ctx.postMessage({ op: Op.USER_CHANGED, data: change.doc })
-                )
-        )
-    }
     // Session
     const session = await allow404(sessionDb.get<Session>(userId))
-    if (session && !changeListeners.has("session")) {
-        changeListeners.set(
-            "session",
-            sessionDb
-                .changes({
-                    ...changeOpts,
-                    doc_ids: [session._id]
-                })
-                .on("change", refreshState("session"))
-        )
-    }
     let currentGame: Game | undefined
     let currentTeam: Team | undefined
     let currentGameTiles: Tile[] = []
     const currentPlayers: Map<string, User> = new Map()
     if (session?.currentGameId) {
-        const [cGame, cTiles] = await Promise.all([
-            gameDb.get<Game>(session.currentGameId),
-            allDocs(
-                tileDb.allDocs<Tile>({
-                    include_docs: true,
-                    keys: tileList(session.currentGameId).map(({ _id }) => _id)
-                })
-            )
-        ])
-        currentGame = cGame
-        currentGameTiles = cTiles
+        try {
+            const [cGame, cTiles] = await Promise.all([
+                gameDb.get<Game>(session.currentGameId),
+                allTiles(session.currentGameId)
+            ])
+            currentGame = cGame
+            currentGameTiles = cTiles
+        } catch (e) {
+            console.log("current game no longer exists...")
+        }
+    }
+    if (currentGame) {
         currentTeam = currentGame.blueIds.includes(userId)
             ? Team.BLUE
             : currentGame.redIds.includes(userId)
@@ -159,40 +132,6 @@ const getState = async (userId: string): Promise<AppState> => {
             if (player) {
                 currentPlayers.set(player._id, player)
             }
-        }
-    }
-    // Cancel old and add new listeners when game ID changes
-    if (currentGame?._id !== lastState.currentGame?._id) {
-        changeListeners.get("currentGame")?.cancel()
-        changeListeners.get("currentGamePlayers")?.cancel()
-        changeListeners.get("currentGameTiles")?.cancel()
-        if (session?.currentGameId) {
-            changeListeners.set(
-                "currentGame",
-                gameDb
-                    .changes({
-                        ...changeOpts,
-                        doc_ids: [session.currentGameId]
-                    })
-                    .on("change", refreshState("currentGame"))
-            )
-        }
-        if (currentGame) {
-            changeListeners.set(
-                "currentGamePlayers",
-                userDb
-                    .changes({ ...changeOpts, doc_ids: currentGame.playerIds })
-                    .on("change", refreshState("currentGamePlayers"))
-            )
-            changeListeners.set(
-                "currentGameTiles",
-                tileDb
-                    .changes({
-                        ...changeOpts,
-                        doc_ids: tileList(currentGame._id).map(({ _id }) => _id)
-                    })
-                    .on("change", refreshState("currentGameTiles"))
-            )
         }
     }
     const nextState = {
@@ -214,18 +153,24 @@ const initialize = async (userId: string) => {
     if (initialized) {
         throw new Error("Double Initialized")
     }
-    const changeOpts = { since: "now", live: true, include_docs: true }
-    // TODO: won't scale
-    changeListeners.set(
-        "games",
-        gameDb
-            .changes(changeOpts)
-            .on("change", change =>
-                ctx.postMessage({ op: Op.GAME_CHANGED, data: change.doc })
-            )
-    )
-    const newState = await getState(userId)
-    ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
+    const updateState = (event: string) => async () => {
+        const newState = await getState(userId)
+        debug(`[${event}] update state:`, newState)
+        ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
+    }
+    setInterval(updateState("poll"), 5000)
+    gameDb
+        .sync(`${REMOTE_URL}/games`, { live: true, retry: true })
+        .on("change", updateState("sync-games"))
+    tileDb
+        .sync(`${REMOTE_URL}/tiles`, { live: true, retry: true })
+        .on("change", updateState("sync-tiles"))
+    userDb
+        .sync(`${REMOTE_URL}/users`, { live: true, retry: true })
+        .on("change", updateState("sync-users"))
+    sessionDb
+        .sync(`${REMOTE_URL}/sessions`, { live: true, retry: true })
+        .on("change", updateState("sync-sessions"))
 }
 const createUser = async ({ _id, name }: { _id: string; name: string }) => {
     await sessionDb.put<Session>({ _id })
@@ -266,12 +211,7 @@ const deleteGame = async (gameId: string, userId: string) => {
     if (!game || game?.creatorId !== userId) {
         return
     }
-    const tiles = await allDocs(
-        tileDb.allDocs<Tile>({
-            include_docs: true,
-            keys: tileList(game._id).map(({ _id }) => _id)
-        })
-    )
+    const tiles = await allTiles(game._id)
     return await Promise.all([
         tileDb.bulkDocs<Tile>(
             tiles.map(tile => ({
@@ -369,25 +309,36 @@ const setGuessCount = async (gameId: string, count: number) => {
     })
 }
 const guessTile = async (gameId: string, userId: string, tileId: string) => {
-    const [tile, game] = await Promise.all([
-        tileDb.get<Tile>(tileId),
+    const [tiles, game] = await Promise.all([
+        allTiles(gameId),
         gameDb.get<Game>(gameId)
     ])
-    if (tile.team === Team.DEATH) {
+    const tileIdx = tiles.findIndex(t => t._id === tileId)
+    const tile = tiles[tileIdx]
+    const userTeam = game.blueIds.includes(userId)
+        ? Team.BLUE
+        : game.redIds.includes(userId)
+        ? Team.RED
+        : Team.NONE
+    if (!tile || userTeam === Team.NONE) {
+        return
+    }
+    tile.guessedBy = userTeam
+    tiles[tileIdx] = tile
+    const winner = getWinner(tiles)
+    if (winner !== Team.NONE) {
+        // Guessed all tiles or death tile. End the game
         game.state = GameState.FINISHED
-    } else if (game.guessesRemaining === 1) {
+    } else if (userTeam !== tile.team || game.guessesRemaining === 1) {
+        // Guessed the wrong team or the last guess, switch turns
         game.turn = game.turn === Team.RED ? Team.BLUE : Team.RED
         game.isGuessing = false
     } else {
+        // Guessed right and have at least one guess remaining.
+        // Allow another guess
         game.guessesRemaining--
     }
-    return Promise.all([
-        gameDb.put<Game>(game),
-        tileDb.put<Tile>({
-            ...tile,
-            guessedBy: userId
-        })
-    ])
+    return Promise.all([gameDb.put<Game>(game), tileDb.put<Tile>(tile)])
 }
 const finishGuessing = async (gameId: string) => {
     const game = await gameDb.get<Game>(gameId)
@@ -414,7 +365,7 @@ const handleMessage = async (
         case Op.CREATE_GAME:
             await createGame(data.name, userId)
             break
-        case Op.CREATE_GAME:
+        case Op.DELETE_GAME:
             await deleteGame(data.gameId, userId)
             break
         case Op.JOIN_GAME:
@@ -448,9 +399,5 @@ const handleMessage = async (
     }
     const newState = await getState(userId)
     ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
-    gameDb.replicate.to(`${REMOTE_URL}/games`)
-    tileDb.replicate.to(`${REMOTE_URL}/tiles`)
-    userDb.replicate.to(`${REMOTE_URL}/users`)
-    sessionDb.replicate.to(`${REMOTE_URL}/sessions`)
 }
 ctx.onmessage = handleMessage

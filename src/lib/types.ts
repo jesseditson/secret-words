@@ -44,7 +44,7 @@ export interface Tile {
     word: string
     x: number
     y: number
-    guessedBy?: string
+    guessedBy?: Team
     team: Team
 }
 

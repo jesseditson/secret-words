@@ -1,6 +1,6 @@
 import React, { FunctionComponent, useState } from "react"
 import { Link } from "./Link"
-import { Game } from "../lib/types"
+import { Game, GameState } from "../lib/types"
 
 interface GamesProps {
     games: Game[]
@@ -21,42 +21,59 @@ export const Games: FunctionComponent<GamesProps> = ({
 }) => {
     const [showingNewDialog, setShowingNewDialog] = useState(false)
     const [newGameName, setNewGameName] = useState<string>("")
+    const newGames = []
+    const activeGames = []
+    const finishedGames = []
+    for (const game of games) {
+        if (game.state === GameState.NEW) {
+            newGames.push(game)
+        } else if (game.state === GameState.STARTED) {
+            activeGames.push(game)
+        } else if (game.state === GameState.FINISHED) {
+            finishedGames.push(game)
+        }
+    }
+    const renderGame = (game: Game) => {
+        const canJoin =
+            game.state === GameState.NEW &&
+            !game.playerIds.some(id => id === userId)
+        return (
+            <li className="game" key={game._id}>
+                <div className="info">
+                    <h4>{game.name}</h4>
+                    <span>
+                        {game.state === GameState.NEW
+                            ? "Waiting for players"
+                            : game.state === GameState.STARTED
+                            ? "In progress"
+                            : "Finished"}
+                    </span>
+                    <span> - </span>
+                    <span>
+                        {game.playerIds.length} player
+                        {game.playerIds.length === 1 ? "" : "s"}
+                    </span>
+                </div>
+                <div className="actions">
+                    <Link
+                        href={`/game/${game._id}`}
+                        onClick={() =>
+                            canJoin ? onJoinGame(game) : onViewGame(game)
+                        }
+                    >
+                        {canJoin ? "Join" : "Show"}
+                    </Link>
+                    {game.creatorId === userId ? (
+                        <Link href="#" onClick={() => onDeleteGame(game)}>
+                            Delete
+                        </Link>
+                    ) : null}
+                </div>
+            </li>
+        )
+    }
     return (
         <div id="games">
-            <h2>Active Games</h2>
-            <ul>
-                {games.map(game => {
-                    const inGame = game.playerIds.find(id => id === userId)
-                    return (
-                        <li className="game" key={game._id}>
-                            <div className="info">
-                                <h3>{game.name}</h3>
-                                <span>
-                                    {game.playerIds.length} player
-                                    {game.playerIds.length === 1 ? "" : "s"}
-                                </span>
-                            </div>
-                            <div className="actions">
-                                <Link
-                                    href={`/game/${game._id}`}
-                                    onClick={() =>
-                                        inGame
-                                            ? onViewGame(game)
-                                            : onJoinGame(game)
-                                    }
-                                >
-                                    {inGame ? "Show" : "Join"}
-                                </Link>
-                                {game.creatorId === userId ? (
-                                    <a onClick={() => onDeleteGame(game)}>
-                                        Delete
-                                    </a>
-                                ) : null}
-                            </div>
-                        </li>
-                    )
-                })}
-            </ul>
             <button onClick={() => setShowingNewDialog(true)}>New Game</button>
             {showingNewDialog ? (
                 <div className="dialog">
@@ -80,6 +97,12 @@ export const Games: FunctionComponent<GamesProps> = ({
                     </form>
                 </div>
             ) : null}
+            <h3>New Games</h3>
+            <ul>{newGames.map(renderGame)}</ul>
+            <h3>Active Games</h3>
+            <ul>{activeGames.map(renderGame)}</ul>
+            <h3>Finished Games</h3>
+            <ul>{finishedGames.map(renderGame)}</ul>
         </div>
     )
 }
