@@ -15,6 +15,7 @@ export enum GameState {
 
 export interface Game {
     _id: string
+    creatorId: string
     name: string
     playerIds: string[]
     blueIds: string[]
@@ -52,4 +53,5 @@ export interface AppState {
     currentUser?: User
     currentGame?: Game
     currentPlayers?: Map<string, User>
+    currentGameTiles?: Tile[]
 }

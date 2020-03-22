@@ -73,7 +73,7 @@ export const App: FunctionComponent<AppProps> = ({
             if (appState.currentGame?._id !== gameId) {
                 sendMessage(Op.JOIN_GAME, { gameId })
             }
-        } else if (window.location.pathname === "/") {
+        } else if (window.location.pathname === "/" && appState.currentGame) {
             sendMessage(Op.HIDE_GAME)
         }
     }, [window.location.href, appState.games.length])
@@ -98,6 +98,9 @@ export const App: FunctionComponent<AppProps> = ({
                     games={appState.games}
                     userId={appState.currentUser._id}
                     onCreateGame={name => sendMessage(Op.CREATE_GAME, { name })}
+                    onDeleteGame={game =>
+                        sendMessage(Op.DELETE_GAME, { gameId: game._id })
+                    }
                     onJoinGame={game => {
                         sendMessage(Op.JOIN_GAME, { gameId: game._id })
                     }}
@@ -118,7 +121,7 @@ export const App: FunctionComponent<AppProps> = ({
                         })
                     }
                     onComplete={() =>
-                        sendMessage(Op.CHANGE_TEAM, {
+                        sendMessage(Op.START_GAME, {
                             gameId: appState.currentGame?._id
                         })
                     }
@@ -128,6 +131,7 @@ export const App: FunctionComponent<AppProps> = ({
                 <GameBoard
                     game={appState.currentGame!}
                     user={appState.currentUser!}
+                    tiles={appState.currentGameTiles!}
                 />
             )}
         </div>

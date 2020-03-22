@@ -6,6 +6,7 @@ interface GamesProps {
     games: Game[]
     userId: string
     onCreateGame: (name: string) => void
+    onDeleteGame: (game: Game) => void
     onJoinGame: (game: Game) => void
     onViewGame: (game: Game) => void
 }
@@ -14,6 +15,7 @@ export const Games: FunctionComponent<GamesProps> = ({
     games,
     userId,
     onCreateGame,
+    onDeleteGame,
     onJoinGame,
     onViewGame
 }) => {
@@ -31,17 +33,26 @@ export const Games: FunctionComponent<GamesProps> = ({
                                 <h3>{game.name}</h3>
                                 <span>
                                     {game.playerIds.length} player
-                                    {game.playerIds.length > 1 ? "s" : ""}
+                                    {game.playerIds.length === 1 ? "" : "s"}
                                 </span>
                             </div>
-                            <Link
-                                href={`/game/${game._id}`}
-                                onClick={() =>
-                                    inGame ? onViewGame(game) : onJoinGame(game)
-                                }
-                            >
-                                {inGame ? "Show" : "Join"}
-                            </Link>
+                            <div className="actions">
+                                <Link
+                                    href={`/game/${game._id}`}
+                                    onClick={() =>
+                                        inGame
+                                            ? onViewGame(game)
+                                            : onJoinGame(game)
+                                    }
+                                >
+                                    {inGame ? "Show" : "Join"}
+                                </Link>
+                                {game.creatorId === userId ? (
+                                    <a onClick={() => onDeleteGame(game)}>
+                                        Delete
+                                    </a>
+                                ) : null}
+                            </div>
                         </li>
                     )
                 })}
@@ -57,7 +68,7 @@ export const Games: FunctionComponent<GamesProps> = ({
                         }}
                     >
                         <fieldset>
-                            <label htmlFor="game-name">Name</label>
+                            <legend>Name</legend>
                             <input
                                 id="game-name"
                                 placeholder="Good Vibes"

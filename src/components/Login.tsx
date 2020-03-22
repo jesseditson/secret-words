@@ -15,7 +15,7 @@ export const Login: FunctionComponent<LoginProps> = ({ onCreateUser }) => {
             }}
         >
             <fieldset>
-                <label htmlFor="user-name">Enter your name</label>
+                <legend>Enter your name</legend>
                 <input
                     id="user-name"
                     placeholder="Fred"

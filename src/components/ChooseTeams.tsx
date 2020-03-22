@@ -23,7 +23,6 @@ export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
 }) => {
     const blueIds = new Set(game.blueIds)
     const redIds = new Set(game.redIds)
-    console.log(game)
     const playerIf = (team: Team, id: string) => {
         const player = players.get(id)
         if (team === Team.BLUE && blueIds.has(id)) {

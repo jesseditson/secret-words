@@ -14,13 +14,21 @@ import dictionary from "../data/dictionary.json"
 
 // Config
 const DB_PREFIX = "secret-words"
+const REMOTE_URL = process.env.REMOTE_URL
+if (!REMOTE_URL) {
+    throw new Error("REMOTE_URL is required")
+}
 const ctx: Worker = self as any
 
 // Setup DBs
 const gameDb = new PouchDB(`${DB_PREFIX}:games`)
+gameDb.sync(`${REMOTE_URL}/games`)
 const tileDb = new PouchDB(`${DB_PREFIX}:tiles`)
+tileDb.sync(`${REMOTE_URL}/tiles`)
 const userDb = new PouchDB(`${DB_PREFIX}:users`)
+userDb.sync(`${REMOTE_URL}/users`)
 const sessionDb = new PouchDB(`${DB_PREFIX}:sessions`)
+sessionDb.sync(`${REMOTE_URL}/sessions`)
 
 // Globals
 const changeListeners: Map<string, PouchDB.Core.Changes<any>> = new Map()
@@ -33,6 +41,9 @@ const allow404 = <T = any>(op: Promise<T>): Promise<T | undefined> => {
         }
         throw e
     })
+}
+const allDocs = <T = any>(op: Promise<PouchDB.Core.AllDocsResponse<T>>) => {
+    return op.then(({ rows }) => rows.filter(r => !!r.doc).map(r => r.doc!))
 }
 function* wordGenerator(): Generator<string> {
     let list: string[] = []
@@ -71,9 +82,9 @@ let lastState: AppState = { games: [], initialized: false }
 const getState = async (userId: string): Promise<AppState> => {
     const [games, user] = await Promise.all([
         // TODO: bad idea, won't scale
-        gameDb
-            .allDocs<Game>({ include_docs: true })
-            .then(({ rows }) => rows.filter(r => !!r.doc).map(r => r.doc!)),
+        allDocs(
+            gameDb.allDocs<Game>({ include_docs: true })
+        ),
         allow404(userDb.get<User>(userId))
     ])
     const changeOpts = { since: "now", live: true, include_docs: true }
@@ -107,9 +118,20 @@ const getState = async (userId: string): Promise<AppState> => {
         )
     }
     let currentGame: Game | undefined
+    let currentGameTiles: Tile[] = []
     const currentPlayers: Map<string, User> = new Map()
     if (session?.currentGameId) {
-        currentGame = await gameDb.get<Game>(session.currentGameId)
+        const [cGame, cTiles] = await Promise.all([
+            gameDb.get<Game>(session.currentGameId),
+            allDocs(
+                tileDb.allDocs<Tile>({
+                    include_docs: true,
+                    keys: tileList(session.currentGameId).map(({ _id }) => _id)
+                })
+            )
+        ])
+        currentGame = cGame
+        currentGameTiles = cTiles
         const { rows: players } = await userDb.allDocs<User>({
             include_docs: true,
             keys: currentGame.playerIds
@@ -158,6 +180,7 @@ const getState = async (userId: string): Promise<AppState> => {
         games: games || [],
         currentUser: user,
         currentGame,
+        currentGameTiles,
         currentPlayers,
         initialized: true
     }
@@ -190,7 +213,7 @@ const createUser = async ({ _id, name }: { _id: string; name: string }) => {
     const newState = await getState(_id)
     ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
 }
-const createGame = ({ name }: { name: string }) => {
+const createGame = (name: string, creatorId: string) => {
     const gameId = uuid()
     const turn = Math.random() > 0.5 ? Team.RED : Team.BLUE
     const wordGen = wordGenerator()
@@ -206,6 +229,7 @@ const createGame = ({ name }: { name: string }) => {
         ),
         gameDb.put<Game>({
             _id: gameId,
+            creatorId,
             name,
             state: GameState.NEW,
             playerIds: [],
@@ -214,6 +238,13 @@ const createGame = ({ name }: { name: string }) => {
             turn
         })
     ])
+}
+const deleteGame = async (gameId: string, userId: string) => {
+    const game = await allow404(gameDb.get<Game>(gameId))
+    if (!game || game?.creatorId !== userId) {
+        return
+    }
+    return gameDb.remove(game)
 }
 const joinGame = async (gameId: string, userId: string) => {
     const game = await gameDb.get<Game>(gameId)
@@ -234,7 +265,10 @@ const showGame = async (gameId: string, userId: string) => {
     })
 }
 const hideGame = async (userId: string) => {
-    const session = await sessionDb.get<Session>(userId)
+    const session = await allow404(sessionDb.get<Session>(userId))
+    if (!session) {
+        return
+    }
     return sessionDb.put<Session>({
         ...session,
         currentGameId: undefined
@@ -280,7 +314,10 @@ const handleMessage = async (
             await createUser({ _id: userId, ...data })
             break
         case Op.CREATE_GAME:
-            await createGame(data)
+            await createGame(data.name, userId)
+            break
+        case Op.CREATE_GAME:
+            await deleteGame(data.gameId, userId)
             break
         case Op.JOIN_GAME:
             await joinGame(data.gameId, userId)
