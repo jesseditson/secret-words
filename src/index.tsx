@@ -20,9 +20,7 @@ const worker = new Worker("./workers/game.ts")
 const sendMessage = (op: Op, data?: object) =>
     worker.postMessage({ userId, op, data })
 
-sendMessage(Op.INITIALIZE, { userId })
-
 render(
-    <App worker={worker} sendMessage={sendMessage} />,
+    <App worker={worker} sendMessage={sendMessage} userId={userId} />,
     document.getElementById("root")
 )

@@ -1,0 +1,64 @@
+import React, { FunctionComponent, useState } from "react"
+import { Game, User, Team } from "../lib/types"
+
+interface ChooseTeamsProps {
+    game: Game
+    players: Map<string, User>
+    onChooseTeam: (playerId: string, team: Team) => void
+    onComplete: () => void
+}
+
+export const needsTeamAssignment = (game: Game): boolean => {
+    const redPlayers = game.redIds.length
+    const bluePlayers = game.blueIds.length
+    const totalPlayers = game.playerIds.length
+    return totalPlayers < 4 || redPlayers + bluePlayers < totalPlayers
+}
+
+export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
+    game,
+    players,
+    onChooseTeam,
+    onComplete
+}) => {
+    const blueIds = new Set(game.blueIds)
+    const redIds = new Set(game.redIds)
+    console.log(game)
+    const playerIf = (team: Team, id: string) => {
+        const player = players.get(id)
+        if (team === Team.BLUE && blueIds.has(id)) {
+            return player?.name
+        } else if (team === Team.RED && redIds.has(id)) {
+            return player?.name
+        } else if (team === Team.NONE && !blueIds.has(id) && !redIds.has(id)) {
+            return player?.name
+        }
+        return <button onClick={() => onChooseTeam(id, team)}>Choose</button>
+    }
+    return (
+        <div id="chooseTeams">
+            <h2>Choose teams for {game.name}</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Red</th>
+                        <th>None</th>
+                        <th>Blue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {game.playerIds.map(id => (
+                        <tr key={id}>
+                            <td>{playerIf(Team.RED, id)}</td>
+                            <td>{playerIf(Team.NONE, id)}</td>
+                            <td>{playerIf(Team.BLUE, id)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            <button disabled={needsTeamAssignment(game)} onClick={onComplete}>
+                Play
+            </button>
+        </div>
+    )
+}

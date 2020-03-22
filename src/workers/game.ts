@@ -1,51 +1,269 @@
 import PouchDB from "pouchdb"
-import { GameMessageEvent, Op, AppMessage, GameMessage } from "../lib/messages"
-import { Game, User } from "../lib/types"
+import { GameMessageEvent, Op, AppMessage } from "../lib/messages"
+import {
+    Game,
+    User,
+    Team,
+    Session,
+    AppState,
+    Tile,
+    GameState
+} from "../lib/types"
 import { v4 as uuid } from "uuid"
+import dictionary from "../data/dictionary.json"
 
 // Config
 const DB_PREFIX = "secret-words"
 const ctx: Worker = self as any
 
 // Setup DBs
-const gamesDb = new PouchDB(`${DB_PREFIX}:games`)
+const gameDb = new PouchDB(`${DB_PREFIX}:games`)
+const tileDb = new PouchDB(`${DB_PREFIX}:tiles`)
 const userDb = new PouchDB(`${DB_PREFIX}:users`)
+const sessionDb = new PouchDB(`${DB_PREFIX}:sessions`)
+
+// Globals
+const changeListeners: Map<string, PouchDB.Core.Changes<any>> = new Map()
+
+// Helpers
+const allow404 = <T = any>(op: Promise<T>): Promise<T | undefined> => {
+    return op.catch(e => {
+        if (e.status === 404) {
+            return undefined
+        }
+        throw e
+    })
+}
+function* wordGenerator(): Generator<string> {
+    let list: string[] = []
+    while (true) {
+        if (list.length === 0) {
+            list = [...dictionary.words]
+        }
+        yield list.splice(Math.floor(Math.random() * list.length), 1)[0]
+    }
+}
+function* teamAssigner(firstTeam: Team): Generator<Team> {
+    let list: Team[] = [Team.DEATH, firstTeam]
+    for (let i = 0; i < 8; i++) {
+        list.push(Team.RED)
+        list.push(Team.BLUE)
+        if (i < 7) {
+            list.push(Team.NONE)
+        }
+    }
+    while (true) {
+        yield list.splice(Math.floor(Math.random() * list.length), 1)[0]
+    }
+}
+const tileList = (gameId: string) => {
+    const tileIds: { _id: string; x: number; y: number }[] = []
+    for (let x = 0; x < 5; x++) {
+        for (let y = 0; y < 5; y++) {
+            tileIds.push({ _id: `${gameId}:${x}-${y}`, x, y })
+        }
+    }
+    return tileIds
+}
+
+// State management
+let lastState: AppState = { games: [], initialized: false }
+const getState = async (userId: string): Promise<AppState> => {
+    const [games, user] = await Promise.all([
+        // TODO: bad idea, won't scale
+        gameDb
+            .allDocs<Game>({ include_docs: true })
+            .then(({ rows }) => rows.filter(r => !!r.doc).map(r => r.doc!)),
+        allow404(userDb.get<User>(userId))
+    ])
+    const changeOpts = { since: "now", live: true, include_docs: true }
+    const refreshState = async () => {
+        const newState = await getState(userId)
+        ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
+    }
+    // User
+    if (userId && lastState.currentUser?._id !== userId) {
+        changeListeners.get("user")?.cancel()
+        changeListeners.set(
+            "user",
+            userDb
+                .changes({ ...changeOpts, doc_ids: [userId] })
+                .on("change", change =>
+                    ctx.postMessage({ op: Op.USER_CHANGED, data: change.doc })
+                )
+        )
+    }
+    // Session
+    const session = await allow404(sessionDb.get<Session>(userId))
+    if (session && !changeListeners.has("session")) {
+        changeListeners.set(
+            "session",
+            sessionDb
+                .changes({
+                    ...changeOpts,
+                    doc_ids: [session._id]
+                })
+                .on("change", refreshState)
+        )
+    }
+    let currentGame: Game | undefined
+    const currentPlayers: Map<string, User> = new Map()
+    if (session?.currentGameId) {
+        currentGame = await gameDb.get<Game>(session.currentGameId)
+        const { rows: players } = await userDb.allDocs<User>({
+            include_docs: true,
+            keys: currentGame.playerIds
+        })
+        for (const { doc: player } of players) {
+            if (player) {
+                currentPlayers.set(player._id, player)
+            }
+        }
+    }
+    // Cancel old and add new listeners when game ID changes
+    if (currentGame?._id !== lastState.currentGame?._id) {
+        changeListeners.get("currentGame")?.cancel()
+        changeListeners.get("currentGamePlayers")?.cancel()
+        changeListeners.get("currentGameTiles")?.cancel()
+        if (session?.currentGameId) {
+            changeListeners.set(
+                "currentGame",
+                gameDb
+                    .changes({
+                        ...changeOpts,
+                        doc_ids: [session.currentGameId]
+                    })
+                    .on("change", refreshState)
+            )
+        }
+        if (currentGame) {
+            changeListeners.set(
+                "currentGamePlayers",
+                userDb
+                    .changes({ ...changeOpts, doc_ids: currentGame.playerIds })
+                    .on("change", refreshState)
+            )
+            changeListeners.set(
+                "currentGameTiles",
+                tileDb
+                    .changes({
+                        ...changeOpts,
+                        doc_ids: tileList(currentGame._id).map(({ _id }) => _id)
+                    })
+                    .on("change", refreshState)
+            )
+        }
+    }
+    const nextState = {
+        games: games || [],
+        currentUser: user,
+        currentGame,
+        currentPlayers,
+        initialized: true
+    }
+    lastState = nextState
+    return nextState
+}
 
 // Operation handlers
-const listGames = async (): Promise<Game[]> => {
-    const { rows } = await gamesDb.allDocs<Game>({ include_docs: true })
-    return rows.filter(r => !!r.doc).map(r => r.doc!)
-}
 let initialized = false
-const initialize = async (
-    userId: string
-): Promise<{ games: Game[]; currentUser?: User; initialized: boolean }> => {
+const initialize = async (userId: string) => {
     if (initialized) {
         throw new Error("Double Initialized")
     }
-    const [games, user] = await Promise.all([
-        listGames(),
-        userDb.get<User>(userId).catch(e => {
-            if (e.status === 404) {
-                return undefined
-            }
-            throw e
-        })
-    ])
-    const options = { live: true, include_docs: true }
-    gamesDb.changes(options).on("change", change => {
-        ctx.postMessage({ op: Op.GAME_CHANGED, data: change.doc })
-    })
-    userDb.changes(options).on("change", change => {
-        ctx.postMessage({ op: Op.USER_CHANGED, data: change.doc })
-    })
-    return { games: games || [], currentUser: user, initialized: true }
-}
-const createGame = async ({ name }: { name: string }) => {
-    gamesDb.put({ _id: uuid(), name })
+    const changeOpts = { since: "now", live: true, include_docs: true }
+    // TODO: won't scale
+    changeListeners.set(
+        "games",
+        gameDb
+            .changes(changeOpts)
+            .on("change", change =>
+                ctx.postMessage({ op: Op.GAME_CHANGED, data: change.doc })
+            )
+    )
+    const newState = await getState(userId)
+    ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
 }
 const createUser = async ({ _id, name }: { _id: string; name: string }) => {
-    userDb.put({ _id, name })
+    await sessionDb.put<Session>({ _id })
+    await userDb.put<User>({ _id, name })
+    const newState = await getState(_id)
+    ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
+}
+const createGame = ({ name }: { name: string }) => {
+    const gameId = uuid()
+    const turn = Math.random() > 0.5 ? Team.RED : Team.BLUE
+    const wordGen = wordGenerator()
+    const teamGen = teamAssigner(turn)
+    return Promise.all([
+        tileDb.bulkDocs<Tile>(
+            tileList(gameId).map(tile => ({
+                ...tile,
+                gameId,
+                word: wordGen.next().value,
+                team: teamGen.next().value
+            }))
+        ),
+        gameDb.put<Game>({
+            _id: gameId,
+            name,
+            state: GameState.NEW,
+            playerIds: [],
+            blueIds: [],
+            redIds: [],
+            turn
+        })
+    ])
+}
+const joinGame = async (gameId: string, userId: string) => {
+    const game = await gameDb.get<Game>(gameId)
+    if (game.playerIds.includes(userId)) {
+        return
+    }
+    game.playerIds.push(userId)
+    return gameDb.put<Game>({
+        ...game,
+        playerIds: game.playerIds
+    })
+}
+const showGame = async (gameId: string, userId: string) => {
+    const session = await sessionDb.get<Session>(userId)
+    return sessionDb.put<Session>({
+        ...session,
+        currentGameId: gameId
+    })
+}
+const hideGame = async (userId: string) => {
+    const session = await sessionDb.get<Session>(userId)
+    return sessionDb.put<Session>({
+        ...session,
+        currentGameId: undefined
+    })
+}
+const changeTeam = async (gameId: string, userId: string, team: Team) => {
+    const game = await gameDb.get<Game>(gameId)
+    if (team === Team.BLUE) {
+        game.blueIds.push(userId)
+        game.redIds = game.redIds.filter(id => id !== userId)
+    } else if (team === Team.RED) {
+        game.redIds.push(userId)
+        game.blueIds = game.blueIds.filter(id => id !== userId)
+    } else if (team === Team.NONE) {
+        game.redIds = game.redIds.filter(id => id !== userId)
+        game.blueIds = game.blueIds.filter(id => id !== userId)
+    }
+    return gameDb.put<Game>({
+        ...game,
+        blueIds: game.blueIds,
+        redIds: game.redIds
+    })
+}
+const startGame = async (gameId: string) => {
+    const game = await gameDb.get<Game>(gameId)
+    return gameDb.put<Game>({
+        ...game,
+        state: GameState.STARTED
+    })
 }
 
 // Route the messages to the handlers
@@ -53,28 +271,33 @@ const handleMessage = async (
     e: GameMessageEvent<any>
 ): Promise<AppMessage | void> => {
     const { data, op, userId } = e.data
-    console.log(userId, op, data)
+    console.info(op, data)
     switch (op) {
-        case Op.INITIALIZE: {
-            const data = await initialize(userId)
-            return { op: Op.INITIALIZE, data }
-        }
-        case Op.CREATE_USER: {
+        case Op.INITIALIZE:
+            initialize(userId)
+            break
+        case Op.CREATE_USER:
             await createUser({ _id: userId, ...data })
-            return
-        }
-        case Op.CREATE_GAME: {
+            break
+        case Op.CREATE_GAME:
             await createGame(data)
-            return
-        }
+            break
+        case Op.JOIN_GAME:
+            await joinGame(data.gameId, userId)
+            await showGame(data.gameId, userId)
+            break
+        case Op.SHOW_GAME:
+            await showGame(data.gameId, userId)
+            break
+        case Op.HIDE_GAME:
+            await hideGame(userId)
+            break
+        case Op.CHANGE_TEAM:
+            await changeTeam(data.gameId, data.playerId, data.team)
+            break
+        case Op.START_GAME:
+            await startGame(data.gameId)
+            break
     }
 }
-
-// Abstract the main API so we have a nice async thing
-ctx.onmessage = (e: GameMessageEvent<GameMessage>) => {
-    handleMessage(e).then(msg => {
-        if (msg) {
-            ctx.postMessage(msg)
-        }
-    })
-}
+ctx.onmessage = handleMessage

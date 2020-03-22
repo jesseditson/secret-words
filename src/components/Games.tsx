@@ -1,16 +1,21 @@
 import React, { FunctionComponent, useState } from "react"
+import { Link } from "./Link"
 import { Game } from "../lib/types"
 
 interface GamesProps {
     games: Game[]
+    userId: string
     onCreateGame: (name: string) => void
-    onSelectGame: (game: Game) => void
+    onJoinGame: (game: Game) => void
+    onViewGame: (game: Game) => void
 }
 
 export const Games: FunctionComponent<GamesProps> = ({
     games,
+    userId,
     onCreateGame,
-    onSelectGame
+    onJoinGame,
+    onViewGame
 }) => {
     const [showingNewDialog, setShowingNewDialog] = useState(false)
     const [newGameName, setNewGameName] = useState<string>("")
@@ -18,16 +23,28 @@ export const Games: FunctionComponent<GamesProps> = ({
         <div id="games">
             <h2>Active Games</h2>
             <ul>
-                {games.map(game => (
-                    <li
-                        className="game"
-                        key={game._id}
-                        onClick={() => onSelectGame(game)}
-                    >
-                        <h3>{game.name}</h3>
-                        {/* <span>{game.}</span> */}
-                    </li>
-                ))}
+                {games.map(game => {
+                    const inGame = game.playerIds.find(id => id === userId)
+                    return (
+                        <li className="game" key={game._id}>
+                            <div className="info">
+                                <h3>{game.name}</h3>
+                                <span>
+                                    {game.playerIds.length} player
+                                    {game.playerIds.length > 1 ? "s" : ""}
+                                </span>
+                            </div>
+                            <Link
+                                href={`/game/${game._id}`}
+                                onClick={() =>
+                                    inGame ? onViewGame(game) : onJoinGame(game)
+                                }
+                            >
+                                {inGame ? "Show" : "Join"}
+                            </Link>
+                        </li>
+                    )
+                })}
             </ul>
             <button onClick={() => setShowingNewDialog(true)}>New Game</button>
             {showingNewDialog ? (

@@ -1,10 +1,16 @@
 export enum Op {
-    UNKNOWN,
-    CREATE_USER,
-    INITIALIZE,
-    CREATE_GAME,
-    GAME_CHANGED,
-    USER_CHANGED
+    UNKNOWN = "Unknown",
+    CREATE_USER = "Create User",
+    INITIALIZE = "Initialize",
+    UPDATE_STATE = "Update State",
+    CREATE_GAME = "Create Game",
+    GAME_CHANGED = "Game Change",
+    USER_CHANGED = "User Change",
+    JOIN_GAME = "Join Game",
+    SHOW_GAME = "Show Game",
+    HIDE_GAME = "Hide Game",
+    CHANGE_TEAM = "Change Team",
+    START_GAME = "Start Game"
 }
 
 export interface MessageData {

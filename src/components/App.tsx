@@ -1,18 +1,16 @@
 import React, { FunctionComponent, useState, useEffect } from "react"
-import { Game, User } from "../lib/types"
+import { AppState, GameState } from "../lib/types"
 import { GameMessageEvent, Op, AppMessage } from "../lib/messages"
 import { Games } from "./Games"
 import { Login } from "./Login"
-
-interface AppState {
-    games: Game[]
-    currentUser?: User
-    initialized: boolean
-}
+import { Link } from "./Link"
+import { GameBoard } from "./GameBoard"
+import { ChooseTeams } from "./ChooseTeams"
 
 interface AppProps {
     worker: Worker
     sendMessage: (op: Op, data?: object) => void
+    userId?: string
 }
 
 const stateFromMessage = (
@@ -21,7 +19,7 @@ const stateFromMessage = (
 ): Partial<AppState> | void => {
     const { op, data } = msg.data
     switch (op) {
-        case Op.INITIALIZE:
+        case Op.UPDATE_STATE:
             return data
         case Op.GAME_CHANGED:
             const newState = { games: [...currentState.games] }
@@ -45,7 +43,13 @@ const stateFromMessage = (
     }
 }
 
-export const App: FunctionComponent<AppProps> = ({ worker, sendMessage }) => {
+const GAME_MATCH = /\/game\/([\w-]+)/i
+
+export const App: FunctionComponent<AppProps> = ({
+    worker,
+    sendMessage,
+    userId
+}) => {
     const [appState, setAppState] = useState<AppState>({
         games: [],
         initialized: false
@@ -55,29 +59,75 @@ export const App: FunctionComponent<AppProps> = ({ worker, sendMessage }) => {
             setAppState(cs => {
                 const newState = stateFromMessage(msg, cs)
                 if (newState) {
-                    console.log(msg.data.op, newState)
                     return { ...cs, ...newState }
                 }
                 return cs
             })
         }
-    }, [worker])
+        sendMessage(Op.INITIALIZE, { userId })
+    }, [worker, userId])
+    useEffect(() => {
+        const gameMatch = window.location.pathname.match(GAME_MATCH)
+        if (gameMatch) {
+            const gameId = gameMatch[1]
+            if (appState.currentGame?._id !== gameId) {
+                sendMessage(Op.JOIN_GAME, { gameId })
+            }
+        } else if (window.location.pathname === "/") {
+            sendMessage(Op.HIDE_GAME)
+        }
+    }, [window.location.href, appState.games.length])
     if (!appState.initialized) {
         return <div id="app">Loading...</div>
     }
     return (
         <div id="app">
             <h1>Secret Words</h1>
+            {appState.currentGame && (
+                <Link href="/" onClick={() => sendMessage(Op.HIDE_GAME)}>
+                    Back to Games
+                </Link>
+            )}
             {!appState.currentUser && (
                 <Login
                     onCreateUser={name => sendMessage(Op.CREATE_USER, { name })}
                 />
             )}
-            {appState.currentUser && (
+            {appState.currentUser && !appState.currentGame && (
                 <Games
                     games={appState.games}
+                    userId={appState.currentUser._id}
                     onCreateGame={name => sendMessage(Op.CREATE_GAME, { name })}
-                    onSelectGame={game => {}}
+                    onJoinGame={game => {
+                        sendMessage(Op.JOIN_GAME, { gameId: game._id })
+                    }}
+                    onViewGame={game => {
+                        sendMessage(Op.SHOW_GAME, { gameId: game._id })
+                    }}
+                />
+            )}
+            {appState.currentGame?.state === GameState.NEW && (
+                <ChooseTeams
+                    players={appState.currentPlayers!}
+                    game={appState.currentGame}
+                    onChooseTeam={(playerId, team) =>
+                        sendMessage(Op.CHANGE_TEAM, {
+                            gameId: appState.currentGame?._id,
+                            playerId,
+                            team
+                        })
+                    }
+                    onComplete={() =>
+                        sendMessage(Op.CHANGE_TEAM, {
+                            gameId: appState.currentGame?._id
+                        })
+                    }
+                />
+            )}
+            {appState.currentGame?.state === GameState.STARTED && (
+                <GameBoard
+                    game={appState.currentGame!}
+                    user={appState.currentUser!}
                 />
             )}
         </div>
