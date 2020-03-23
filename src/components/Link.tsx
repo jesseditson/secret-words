@@ -15,7 +15,7 @@ export const Link: FunctionComponent<LinkProps> = ({
         onClick={e => {
             e.preventDefault()
             onClick(e)
-            window.history.pushState({}, "", href)
+            // window.history.pushState({}, "", href)
         }}
     >
         {children}
