@@ -1,6 +1,6 @@
 {
   "name": "secret-words",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Secret Words game to play when you're stuck at home and so are all your friends",
   "main": "src/index.html",
   "dependencies": {
