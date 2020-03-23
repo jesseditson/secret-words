@@ -1,5 +1,6 @@
 .tile {
-    border: 2px solid transparent;
+    border: 2px solid #f2f2f2;
+    padding: 40px 20px;
     cursor: not-allowed;
     &.showing:not(.guessed) {
         opacity: 0.3;
