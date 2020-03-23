@@ -1,4 +1,4 @@
-import React, { FunctionComponent, useState } from "react"
+import React, { FunctionComponent } from "react"
 import { Game, User, Team } from "../lib/types"
 
 interface ChooseTeamsProps {

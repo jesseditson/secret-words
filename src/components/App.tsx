@@ -51,12 +51,18 @@ export const App: FunctionComponent<AppProps> = ({
             <h1>Secret Words</h1>
             <p>
                 {appState.currentUser && (
-                    <span>{appState.currentUser.name} - </span>
+                    <span>{appState.currentUser.name}</span>
                 )}
                 {appState.currentGame && (
-                    <Link href="/" onClick={() => sendMessage(Op.HIDE_GAME)}>
-                        Back to Games
-                    </Link>
+                    <nav>
+                        <span> - </span>
+                        <Link
+                            href="/"
+                            onClick={() => sendMessage(Op.HIDE_GAME)}
+                        >
+                            Back to Games
+                        </Link>
+                    </nav>
                 )}
             </p>
             {!appState.currentUser && (
