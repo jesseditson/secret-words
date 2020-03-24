@@ -54,7 +54,11 @@ export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
             <nav>
                 <h2>Choose teams for {game.name}</h2>
                 <button
-                    disabled={game.playerIds.length < 4}
+                    disabled={
+                        game.playerIds.length < 4 ||
+                        redIds.size < 2 ||
+                        blueIds.size < 2
+                    }
                     onClick={onComplete}
                 >
                     Play

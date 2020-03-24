@@ -140,6 +140,9 @@ export const App: FunctionComponent<AppProps> = ({
                 {appState.currentGame &&
                     appState.currentGame.state !== GameState.NEW && (
                         <GameBoard
+                            players={Array.from(
+                                appState.currentPlayers!.values()
+                            )}
                             game={appState.currentGame!}
                             user={appState.currentUser!}
                             tiles={appState.currentGameTiles!}
