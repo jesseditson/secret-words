@@ -13,7 +13,8 @@ export enum Op {
     START_GAME = "Start Game",
     SET_GUESS_COUNT = "Set Guess Count",
     GUESS_TILE = "Guess Tile",
-    FINISH_GUESSING = "Finish Guessing"
+    FINISH_GUESSING = "Finish Guessing",
+    REROLL_BOARD = "Reroll Board"
 }
 
 export interface MessageData {

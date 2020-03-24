@@ -1,6 +1,8 @@
 import React, { FunctionComponent, useState } from "react"
 import { Link } from "./Link"
 import { Game, GameState } from "../lib/types"
+import "./games.scss"
+import { X, Trash, UserPlus, Eye } from "react-feather"
 
 interface GamesProps {
     games: Game[]
@@ -55,53 +57,72 @@ export const Games: FunctionComponent<GamesProps> = ({
                     </span>
                 </div>
                 <div className="actions">
+                    {game.creatorId === userId ? (
+                        <Link href="#" onClick={() => onDeleteGame(game)}>
+                            <Trash /> Delete
+                        </Link>
+                    ) : null}
                     <Link
                         href={`/game/${game._id}`}
                         onClick={() =>
                             canJoin ? onJoinGame(game) : onViewGame(game)
                         }
                     >
+                        {canJoin ? <UserPlus /> : <Eye />}{" "}
                         {canJoin ? "Join" : "Show"}
                     </Link>
-                    {game.creatorId === userId ? (
-                        <Link href="#" onClick={() => onDeleteGame(game)}>
-                            Delete
-                        </Link>
-                    ) : null}
                 </div>
             </li>
         )
     }
     return (
         <div id="games">
-            <button onClick={() => setShowingNewDialog(true)}>New Game</button>
             {showingNewDialog ? (
-                <div className="dialog">
-                    <form
-                        onSubmit={e => {
-                            e.preventDefault()
-                            onCreateGame(newGameName!)
-                            setShowingNewDialog(false)
-                        }}
-                    >
-                        <fieldset>
-                            <legend>Name</legend>
-                            <input
-                                id="game-name"
-                                placeholder="Good Vibes"
-                                value={newGameName}
-                                onChange={e => setNewGameName(e.target.value)}
-                            />
-                        </fieldset>
-                        <button disabled={!newGameName}>Create</button>
-                    </form>
+                <div className="dialog-container">
+                    <div className="dialog">
+                        <form
+                            onSubmit={e => {
+                                e.preventDefault()
+                                onCreateGame(newGameName!)
+                                setShowingNewDialog(false)
+                            }}
+                        >
+                            <nav>
+                                <h3>New Game</h3>
+                                <a onClick={() => setShowingNewDialog(false)}>
+                                    <X />
+                                </a>
+                            </nav>
+                            <fieldset>
+                                <legend>Name</legend>
+                                <input
+                                    id="game-name"
+                                    placeholder="Good Vibes"
+                                    value={newGameName}
+                                    onChange={e =>
+                                        setNewGameName(e.target.value)
+                                    }
+                                />
+                            </fieldset>
+                            <button disabled={!newGameName}>Create</button>
+                        </form>
+                    </div>
                 </div>
             ) : null}
-            <h3>New Games</h3>
+            <nav>
+                <h3>New Games</h3>
+                <button onClick={() => setShowingNewDialog(true)}>
+                    New Game
+                </button>
+            </nav>
             <ul>{newGames.map(renderGame)}</ul>
-            <h3>Active Games</h3>
+            <nav>
+                <h3>Active Games</h3>
+            </nav>
             <ul>{activeGames.map(renderGame)}</ul>
-            <h3>Finished Games</h3>
+            <nav>
+                <h3>Finished Games</h3>
+            </nav>
             <ul>{finishedGames.map(renderGame)}</ul>
         </div>
     )

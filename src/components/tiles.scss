@@ -1,0 +1,13 @@
+.tiles {
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 40rem;
+    justify-content: center;
+    .tile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 4rem;
+        height: 2rem;
+    }
+}

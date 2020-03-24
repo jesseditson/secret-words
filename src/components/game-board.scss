@@ -1,0 +1,22 @@
+#game {
+    .info-container {
+        padding: 1rem;
+    }
+
+    .number-field {
+        flex-grow: 1;
+    }
+    .number-field,
+    .field-content {
+        display: flex;
+        align-items: center;
+        font-family: sans-serif;
+        .number-value {
+            font-size: 2rem;
+        }
+        .button {
+            cursor: pointer;
+            padding: 1rem;
+        }
+    }
+}

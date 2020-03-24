@@ -300,6 +300,22 @@ const startGame = async (gameId: string) => {
         state: GameState.STARTED
     })
 }
+const rerollBoard = async (gameId: string) => {
+    const [tiles, game] = await Promise.all([
+        allTiles(gameId),
+        gameDb.get<Game>(gameId)
+    ])
+    const wordGen = wordGenerator()
+    const teamGen = teamAssigner(game.turn)
+    return tileDb.bulkDocs<Tile>(
+        tiles.map(tile => ({
+            ...tile,
+            gameId,
+            word: wordGen.next().value,
+            team: teamGen.next().value
+        }))
+    )
+}
 const setGuessCount = async (gameId: string, count: number) => {
     const game = await gameDb.get<Game>(gameId)
     return gameDb.put<Game>({
@@ -383,6 +399,9 @@ const handleMessage = async (
             break
         case Op.CHANGE_TEAM:
             await changeTeam(data.gameId, data.playerId, data.team)
+            break
+        case Op.REROLL_BOARD:
+            await rerollBoard(data.gameId)
             break
         case Op.START_GAME:
             await startGame(data.gameId)

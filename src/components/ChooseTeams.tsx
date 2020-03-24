@@ -1,5 +1,12 @@
-import React, { FunctionComponent } from "react"
+import React, { FunctionComponent, ReactNode } from "react"
 import { Game, User, Team } from "../lib/types"
+import "./choose-teams.scss"
+import {
+    ChevronsLeft,
+    ChevronsRight,
+    ChevronLeft,
+    ChevronRight
+} from "react-feather"
 
 interface ChooseTeamsProps {
     game: Game
@@ -7,13 +14,6 @@ interface ChooseTeamsProps {
     onChooseTeam: (playerId: string, team: Team) => void
     onSetHinter: (playerId: string, team: Team) => void
     onComplete: () => void
-}
-
-export const needsTeamAssignment = (game: Game): boolean => {
-    const redPlayers = game.redIds.length
-    const bluePlayers = game.blueIds.length
-    const totalPlayers = game.playerIds.length
-    return totalPlayers < 4 || redPlayers + bluePlayers < totalPlayers
 }
 
 export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
@@ -25,7 +25,7 @@ export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
 }) => {
     const blueIds = new Set(game.blueIds)
     const redIds = new Set(game.redIds)
-    const playerIf = (team: Team, id: string) => {
+    const playerIf = (team: Team, id: string, icon?: ReactNode) => {
         const player = players.get(id)
         const isHinter =
             player && (game.blueHinter === id || game.redHinter === id)
@@ -42,32 +42,48 @@ export const ChooseTeams: FunctionComponent<ChooseTeamsProps> = ({
         } else if (team === Team.NONE && !blueIds.has(id) && !redIds.has(id)) {
             return playerContent
         }
-        return <button onClick={() => onChooseTeam(id, team)}>Choose</button>
+        const defaultIcon = blueIds.has(id) ? <ChevronLeft /> : <ChevronRight />
+        return (
+            <a onClick={() => onChooseTeam(id, team)}>
+                {icon ? icon : defaultIcon}
+            </a>
+        )
     }
     return (
-        <div id="chooseTeams">
-            <h2>Choose teams for {game.name}</h2>
+        <div id="choose-teams">
+            <nav>
+                <h2>Choose teams for {game.name}</h2>
+                <button
+                    disabled={game.playerIds.length < 4}
+                    onClick={onComplete}
+                >
+                    Play
+                </button>
+            </nav>
             <table>
                 <thead>
                     <tr>
-                        <th>Red</th>
-                        <th>None</th>
-                        <th>Blue</th>
+                        <th className="red">Red</th>
+                        <th className="neutral">None</th>
+                        <th className="blue">Blue</th>
                     </tr>
                 </thead>
                 <tbody>
                     {game.playerIds.map(id => (
                         <tr key={id}>
-                            <td>{playerIf(Team.RED, id)}</td>
-                            <td>{playerIf(Team.NONE, id)}</td>
-                            <td>{playerIf(Team.BLUE, id)}</td>
+                            <td className="red">
+                                {playerIf(Team.RED, id, <ChevronsLeft />)}
+                            </td>
+                            <td className="neutral">
+                                {playerIf(Team.NONE, id)}
+                            </td>
+                            <td className="blue">
+                                {playerIf(Team.BLUE, id, <ChevronsRight />)}
+                            </td>
                         </tr>
                     ))}
                 </tbody>
             </table>
-            <button disabled={needsTeamAssignment(game)} onClick={onComplete}>
-                Play
-            </button>
         </div>
     )
 }

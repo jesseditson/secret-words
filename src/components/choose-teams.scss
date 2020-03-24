@@ -1,0 +1,19 @@
+@import "../palette";
+
+#choose-teams {
+    display: flex;
+    flex-direction: column;
+    table {
+        width: 100%;
+        td {
+            width: 33%;
+            text-align: center;
+            svg {
+                stroke: $foreground;
+            }
+        }
+    }
+    button {
+        align-self: flex-end;
+    }
+}

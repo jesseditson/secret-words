@@ -6,6 +6,9 @@ import { Login } from "./Login"
 import { Link } from "./Link"
 import { GameBoard } from "./GameBoard"
 import { ChooseTeams } from "./ChooseTeams"
+import { ChevronLeft } from "react-feather"
+import { Tiles } from "./Tiles"
+import "./tiles.scss"
 
 interface AppProps {
     worker: Worker
@@ -48,95 +51,119 @@ export const App: FunctionComponent<AppProps> = ({
     }
     return (
         <div id="app">
-            <h1>Secret Words</h1>
-            <p>
+            <nav className="header">
+                {appState.currentGame ? (
+                    <Link href="/" onClick={() => sendMessage(Op.HIDE_GAME)}>
+                        <ChevronLeft /> Games
+                    </Link>
+                ) : (
+                    <div className="spacer" />
+                )}
+                <h1>Secret Words</h1>
                 {appState.currentUser && (
                     <span>{appState.currentUser.name}</span>
                 )}
-                {appState.currentGame && (
-                    <nav>
-                        <span> - </span>
-                        <Link
-                            href="/"
-                            onClick={() => sendMessage(Op.HIDE_GAME)}
-                        >
-                            Back to Games
-                        </Link>
-                    </nav>
+            </nav>
+            <section className="content">
+                {!appState.currentUser && (
+                    <Login
+                        onCreateUser={name =>
+                            sendMessage(Op.CREATE_USER, { name })
+                        }
+                    />
                 )}
-            </p>
-            {!appState.currentUser && (
-                <Login
-                    onCreateUser={name => sendMessage(Op.CREATE_USER, { name })}
-                />
-            )}
-            {appState.currentUser && !appState.currentGame && (
-                <Games
-                    games={appState.games}
-                    userId={appState.currentUser._id}
-                    onCreateGame={name => sendMessage(Op.CREATE_GAME, { name })}
-                    onDeleteGame={game =>
-                        sendMessage(Op.DELETE_GAME, { gameId: game._id })
-                    }
-                    onJoinGame={game => {
-                        sendMessage(Op.JOIN_GAME, { gameId: game._id })
-                    }}
-                    onViewGame={game => {
-                        sendMessage(Op.SHOW_GAME, { gameId: game._id })
-                    }}
-                />
-            )}
-            {appState.currentGame?.state === GameState.NEW && (
-                <ChooseTeams
-                    players={appState.currentPlayers!}
-                    game={appState.currentGame}
-                    onChooseTeam={(playerId, team) =>
-                        sendMessage(Op.CHANGE_TEAM, {
-                            gameId: appState.currentGame?._id,
-                            playerId,
-                            team
-                        })
-                    }
-                    onSetHinter={(playerId, team) =>
-                        sendMessage(Op.MAKE_HINTER, {
-                            gameId: appState.currentGame?._id,
-                            playerId,
-                            team
-                        })
-                    }
-                    onComplete={() =>
-                        sendMessage(Op.START_GAME, {
-                            gameId: appState.currentGame?._id
-                        })
-                    }
-                />
-            )}
-            {appState.currentGame &&
-                appState.currentGame.state !== GameState.NEW && (
-                    <GameBoard
-                        game={appState.currentGame!}
-                        user={appState.currentUser!}
-                        tiles={appState.currentGameTiles!}
-                        userTeam={appState.currentTeam!}
-                        onGuess={tile =>
-                            sendMessage(Op.GUESS_TILE, {
-                                tileId: tile._id,
-                                gameId: appState.currentGame!._id
+                {appState.currentUser && !appState.currentGame && (
+                    <Games
+                        games={appState.games}
+                        userId={appState.currentUser._id}
+                        onCreateGame={name =>
+                            sendMessage(Op.CREATE_GAME, { name })
+                        }
+                        onDeleteGame={game =>
+                            sendMessage(Op.DELETE_GAME, { gameId: game._id })
+                        }
+                        onJoinGame={game => {
+                            sendMessage(Op.JOIN_GAME, { gameId: game._id })
+                        }}
+                        onViewGame={game => {
+                            sendMessage(Op.SHOW_GAME, { gameId: game._id })
+                        }}
+                    />
+                )}
+                {appState.currentGame?.state === GameState.NEW && (
+                    <ChooseTeams
+                        players={appState.currentPlayers!}
+                        game={appState.currentGame}
+                        onChooseTeam={(playerId, team) =>
+                            sendMessage(Op.CHANGE_TEAM, {
+                                gameId: appState.currentGame?._id,
+                                playerId,
+                                team
                             })
                         }
-                        onSetGuessCount={count =>
-                            sendMessage(Op.SET_GUESS_COUNT, {
-                                count,
-                                gameId: appState.currentGame!._id
+                        onSetHinter={(playerId, team) =>
+                            sendMessage(Op.MAKE_HINTER, {
+                                gameId: appState.currentGame?._id,
+                                playerId,
+                                team
                             })
                         }
-                        onFinishGuessing={() =>
-                            sendMessage(Op.FINISH_GUESSING, {
-                                gameId: appState.currentGame!._id
+                        onComplete={() =>
+                            sendMessage(Op.START_GAME, {
+                                gameId: appState.currentGame?._id
                             })
                         }
                     />
                 )}
+                {appState.currentGame &&
+                    appState.currentGame.state === GameState.NEW && (
+                        <div className="board">
+                            <nav>
+                                <h4>Game Board</h4>
+                                <button
+                                    onClick={() =>
+                                        sendMessage(Op.REROLL_BOARD, {
+                                            gameId: appState.currentGame!._id
+                                        })
+                                    }
+                                >
+                                    Reroll Board
+                                </button>
+                            </nav>
+                            <Tiles
+                                tiles={appState.currentGameTiles!}
+                                isGuessing={false}
+                                showTeams={false}
+                            />
+                        </div>
+                    )}
+                {appState.currentGame &&
+                    appState.currentGame.state !== GameState.NEW && (
+                        <GameBoard
+                            game={appState.currentGame!}
+                            user={appState.currentUser!}
+                            tiles={appState.currentGameTiles!}
+                            userTeam={appState.currentTeam!}
+                            onGuess={tile =>
+                                sendMessage(Op.GUESS_TILE, {
+                                    tileId: tile._id,
+                                    gameId: appState.currentGame!._id
+                                })
+                            }
+                            onSetGuessCount={count =>
+                                sendMessage(Op.SET_GUESS_COUNT, {
+                                    count,
+                                    gameId: appState.currentGame!._id
+                                })
+                            }
+                            onFinishGuessing={() =>
+                                sendMessage(Op.FINISH_GUESSING, {
+                                    gameId: appState.currentGame!._id
+                                })
+                            }
+                        />
+                    )}
+            </section>
         </div>
     )
 }

@@ -11,6 +11,7 @@
     "pouchdb-debug": "^7.2.1",
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
+    "react-feather": "^2.0.3",
     "uuid": "^7.0.2"
   },
   "devDependencies": {

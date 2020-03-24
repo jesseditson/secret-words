@@ -11,6 +11,7 @@ export const Link: FunctionComponent<LinkProps> = ({
     onClick
 }) => (
     <a
+        className="link"
         href={href}
         onClick={e => {
             e.preventDefault()
