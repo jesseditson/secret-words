@@ -29,7 +29,10 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
     onFinishGuessing
 }) => {
     const [guessCount, setGuessCount] = useState(1)
-    const isFinished = game.state === GameState.FINISHED
+    const redTilesRemaining = countTilesLeft(tiles, Team.RED)
+    const blueTilesRemaining = countTilesLeft(tiles, Team.BLUE)
+    const isFinished =
+        game.state === GameState.FINISHED || getWinner(tiles) !== Team.NONE
     const isPlayer = userTeam !== Team.NONE
     let isHinter = false
     if (userTeam === Team.RED && game.redHinter === user._id) {
@@ -45,8 +48,6 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
         game.guessesRemaining === 1
             ? "1 guess"
             : `${game.guessesRemaining} guesses`
-    const redTilesRemaining = countTilesLeft(tiles, Team.RED)
-    const blueTilesRemaining = countTilesLeft(tiles, Team.BLUE)
     const desc = (color: string, count: number, prefix: boolean = false) =>
         count === 1 ? (
             <span>

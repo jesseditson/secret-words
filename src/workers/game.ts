@@ -12,7 +12,7 @@ import {
 import { v4 as uuid } from "uuid"
 import dictionary from "../data/dictionary.json"
 import getLogger from "debug"
-import { countTilesLeft, getWinner } from "../lib/util"
+import { getWinner } from "../lib/util"
 const debug = getLogger("secret-words:game")
 
 // Debugging
