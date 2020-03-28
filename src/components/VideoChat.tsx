@@ -1,6 +1,5 @@
 import React, { FunctionComponent, useRef, useEffect } from "react"
-import { User } from "../lib/types"
-import PubNub from "pubnub"
+import Scaledrone from "scaledrone-node"
 import Peer from "simple-peer"
 import "./video-chat.scss"
 
@@ -9,27 +8,17 @@ interface VideoChatProps {
     peerIds: string[]
 }
 
-let pubnub: PubNub
+let drone: any = null
 const peerMessageHandlers: Map<
     string,
     (message: any) => Promise<void> | void
 > = new Map()
-const setupPubNub = (uuid: string) => {
-    if (pubnub) {
+const setupScaleDrone = (uuid: string) => {
+    if (drone) {
         return
     }
-    pubnub = new PubNub({
-        publishKey: process.env.PUBNUB_PUB_KEY,
-        subscribeKey: process.env.PUBNUB_SUB_KEY!,
-        uuid
-    })
-    pubnub.addListener({
-        message: async ({ channel, message }) => {
-            if (peerMessageHandlers.has(channel)) {
-                peerMessageHandlers.get(channel)!(message)
-            }
-        }
-    })
+    const drone = new Scaledrone(process.env.SCALEDRONE_KEY)
+    drone.authenticate(process.env.SCALEDRONE_SECRET)
 }
 
 const remoteTracks: Map<string, MediaStream> = new Map()
@@ -52,8 +41,8 @@ const setupVideoChat = async (userId: string, peerIds: string[]) => {
         const peer = new Peer({ initiator: true, stream })
         const channel = `${userId}->${peerId}`
         const sendMessage = (message: any) => {
-            pubnub.publish({
-                channel,
+            drone.publish({
+                room: channel,
                 message
             })
         }
@@ -66,7 +55,7 @@ const setupVideoChat = async (userId: string, peerIds: string[]) => {
             () => sendMessage("connected"),
             1000
         )
-        peerMessageHandlers.set(`${peerId}->${userId}`, data => {
+        const room = drone.subscribe(`${peerId}->${userId}`, (data: any) => {
             if (data === "connected") {
                 console.log("got connection from ", peerId)
                 if (!connected) {
@@ -98,13 +87,6 @@ const setupVideoChat = async (userId: string, peerIds: string[]) => {
             }
         })
     })
-    pubnub.subscribe({
-        channels: peerIds.reduce((channels: string[], peerId) => {
-            // channels.push(`${userId}->${peerId}`)
-            channels.push(`${peerId}->${userId}`)
-            return channels
-        }, [])
-    })
 }
 
 export const VideoChat: FunctionComponent<VideoChatProps> = ({
@@ -112,7 +94,7 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
     peerIds
 }) => {
     useEffect(() => {
-        setupPubNub(userId)
+        setupScaleDrone(userId)
         setupVideoChat(userId, peerIds)
     }, [])
     const setVideoEl = (id: string, ref: HTMLVideoElement | null) => {
