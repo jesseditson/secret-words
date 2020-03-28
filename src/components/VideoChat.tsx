@@ -1,5 +1,4 @@
 import React, { FunctionComponent, useRef, useEffect } from "react"
-import { User } from "../lib/types"
 import PubNub from "pubnub"
 import Peer from "simple-peer"
 import "./video-chat.scss"
@@ -49,29 +48,34 @@ const setupVideoChat = async (userId: string, peerIds: string[]) => {
         if (peerId === userId) {
             return
         }
-        const peer = new Peer({ initiator: true, stream })
-        const channel = `${userId}->${peerId}`
         const sendMessage = (message: any) => {
             pubnub.publish({
-                channel,
+                channel: `${userId}->${peerId}`,
                 message
             })
         }
         let signals: any[] = []
         let connected = false
-        peer.on("signal", data => {
-            signals.push(data)
+        const local = new Peer({ initiator: true, stream, trickle: false })
+        const remote = new Peer()
+        local.on("signal", data => {
+            if (connected) {
+                remote.signal(data)
+            } else {
+                signals.push(data)
+            }
         })
+        remote.on("signal", data => {
+            local.signal(data)
+        })
+
         const connectInterval = setInterval(
             () => sendMessage("connected"),
             1000
         )
         peerMessageHandlers.set(`${peerId}->${userId}`, data => {
             if (data === "connected") {
-                console.log("got connection from ", peerId)
                 if (!connected) {
-                    console.log(connected)
-                    clearInterval(connectInterval)
                     connected = true
                     signals.forEach(data => {
                         sendMessage(data)
@@ -79,24 +83,32 @@ const setupVideoChat = async (userId: string, peerIds: string[]) => {
                     signals = []
                 }
             } else {
-                console.log("got signal", peer)
-                peer.signal(data)
+                remote.signal(data)
             }
         })
-
-        peer.on("connect", () => {
-            console.log("connected")
+        local.on("connect", () => {
+            clearInterval(connectInterval)
         })
 
-        peer.on("stream", (stream: MediaStream) => {
+        const getElement = () =>
+            document.getElementById(`video-${peerId}`) as HTMLVideoElement
+        remote.on("stream", (stream: MediaStream) => {
             remoteTracks.set(peerId, stream)
-            const element = document.getElementById(
-                `video-${peerId}`
-            ) as HTMLVideoElement
+            const element = getElement()
             if (element && !element.srcObject) {
                 element.srcObject = stream
             }
         })
+
+        const removeStream = () => {
+            remoteTracks.delete(peerId)
+            const element = getElement()
+            if (element && element.srcObject) {
+                element.srcObject = null
+            }
+        }
+        remote.on("close", removeStream)
+        remote.on("error", removeStream)
     })
     pubnub.subscribe({
         channels: peerIds.reduce((channels: string[], peerId) => {
