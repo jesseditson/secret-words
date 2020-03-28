@@ -6,6 +6,7 @@ import { Login } from "./Login"
 import { Link } from "./Link"
 import { GameBoard } from "./GameBoard"
 import { ChooseTeams } from "./ChooseTeams"
+import { VideoChat } from "./VideoChat"
 import { ChevronLeft } from "react-feather"
 import { Tiles } from "./Tiles"
 import "./tiles.scss"
@@ -140,9 +141,6 @@ export const App: FunctionComponent<AppProps> = ({
                 {appState.currentGame &&
                     appState.currentGame.state !== GameState.NEW && (
                         <GameBoard
-                            players={Array.from(
-                                appState.currentPlayers!.values()
-                            )}
                             game={appState.currentGame!}
                             user={appState.currentUser!}
                             tiles={appState.currentGameTiles!}
@@ -167,6 +165,14 @@ export const App: FunctionComponent<AppProps> = ({
                         />
                     )}
             </section>
+            {/* <section>
+                {appState.currentGame ? (
+                    <VideoChat
+                        user={appState.currentUser!}
+                        players={Array.from(appState.currentPlayers!.values())}
+                    />
+                ) : null}
+            </section> */}
         </div>
     )
 }

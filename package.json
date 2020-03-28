@@ -4,6 +4,7 @@
   "description": "A Secret Words game to play when you're stuck at home and so are all your friends",
   "main": "src/index.html",
   "dependencies": {
+    "@types/simple-peer": "^9.6.0",
     "classnames": "^2.2.6",
     "debug": "^4.1.1",
     "js-cookie": "^2.2.1",
@@ -13,6 +14,7 @@
     "react": "^16.13.1",
     "react-dom": "^16.13.1",
     "react-feather": "^2.0.3",
+    "simple-peer": "^9.6.2",
     "uuid": "^7.0.2"
   },
   "devDependencies": {

@@ -3,15 +3,12 @@ import { Game, User, Tile, Team, GameState } from "../lib/types"
 import { countTilesLeft, getWinner } from "../lib/util"
 import { Tiles } from "./Tiles"
 import "./game-board.scss"
-import { Link } from "./Link"
 import { Minus, Plus } from "react-feather"
-import { VideoChat } from "./VideoChat"
 
 interface GameBoardProps {
     game: Game
     tiles: Tile[]
     user: User
-    players: User[]
     userTeam: Team
     onGuess: (tile: Tile) => void
     onSetGuessCount: (count: number) => void
@@ -22,7 +19,6 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
     game,
     tiles,
     user,
-    players,
     userTeam,
     onGuess,
     onSetGuessCount,
@@ -187,7 +183,6 @@ export const GameBoard: FunctionComponent<GameBoardProps> = ({
                     onClickTile={tile => onGuess(tile)}
                 />
             </div>
-            {/* <VideoChat user={user} users={players} game={game} /> */}
         </div>
     )
 }
