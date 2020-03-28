@@ -9,6 +9,7 @@ import { ChooseTeams } from "./ChooseTeams"
 import { VideoChat } from "./VideoChat"
 import { ChevronLeft } from "react-feather"
 import { Tiles } from "./Tiles"
+import "./app.scss"
 import "./tiles.scss"
 
 interface AppProps {
@@ -28,6 +29,7 @@ export const App: FunctionComponent<AppProps> = ({
         games: [],
         initialized: false
     })
+    const [showingVC, setShowingVC] = useState<boolean>(false)
     useEffect(() => {
         worker.onmessage = async (msg: GameMessageEvent<AppMessage>) => {
             if (msg.data.op === Op.UPDATE_STATE) {
@@ -53,17 +55,30 @@ export const App: FunctionComponent<AppProps> = ({
     return (
         <div id="app">
             <nav className="header">
-                {appState.currentGame ? (
-                    <Link href="/" onClick={() => sendMessage(Op.HIDE_GAME)}>
-                        <ChevronLeft /> Games
-                    </Link>
-                ) : (
-                    <div className="spacer" />
-                )}
+                <div className="left">
+                    {appState.currentGame && (
+                        <Link
+                            href="/"
+                            onClick={() => sendMessage(Op.HIDE_GAME)}
+                        >
+                            <ChevronLeft /> Games
+                        </Link>
+                    )}
+                </div>
                 <h1>Secret Words</h1>
-                {appState.currentUser && (
-                    <span>{appState.currentUser.name}</span>
-                )}
+                <div className="right">
+                    {appState.currentGame && (
+                        <span
+                            className="camera-button"
+                            onClick={() => setShowingVC(!showingVC)}
+                        >
+                            {showingVC ? "📸" : "📷"}
+                        </span>
+                    )}
+                    {appState.currentUser && (
+                        <span>{appState.currentUser.name}</span>
+                    )}
+                </div>
             </nav>
             <section className="content">
                 {!appState.currentUser && (
@@ -165,16 +180,16 @@ export const App: FunctionComponent<AppProps> = ({
                         />
                     )}
             </section>
-            <section>
-                {appState.currentGame ? (
+            {appState.currentGame && showingVC ? (
+                <section>
                     <VideoChat
                         userId={appState.currentUser!._id}
                         peerIds={Array.from(
                             appState.currentPlayers!.values()
                         ).map(p => p._id)}
                     />
-                ) : null}
-            </section>
+                </section>
+            ) : null}
         </div>
     )
 }

@@ -1,38 +1,15 @@
 import React, { FunctionComponent, useRef, useEffect } from "react"
-import PubNub from "pubnub"
-import Peer from "simple-peer"
 import "./video-chat.scss"
+import { connectToPeer } from "../lib/rtc-connections"
 
 interface VideoChatProps {
     userId: string
     peerIds: string[]
 }
 
-let pubnub: PubNub
-const peerMessageHandlers: Map<
-    string,
-    (message: any) => Promise<void> | void
-> = new Map()
-const setupPubNub = (uuid: string) => {
-    if (pubnub) {
-        return
-    }
-    pubnub = new PubNub({
-        publishKey: process.env.PUBNUB_PUB_KEY,
-        subscribeKey: process.env.PUBNUB_SUB_KEY!,
-        uuid
-    })
-    pubnub.addListener({
-        message: async ({ channel, message }) => {
-            if (peerMessageHandlers.has(channel)) {
-                peerMessageHandlers.get(channel)!(message)
-            }
-        }
-    })
-}
-
-const remoteTracks: Map<string, MediaStream> = new Map()
-const setupVideoChat = async (userId: string, peerIds: string[]) => {
+const remoteStreams: Map<string, MediaStream> = new Map()
+let localStream: MediaStream
+const setupVideoChat = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
@@ -43,94 +20,61 @@ const setupVideoChat = async (userId: string, peerIds: string[]) => {
     if (localVideo && !localVideo.srcObject) {
         localVideo.srcObject = stream
     }
-    console.log("setting up")
+    localStream = stream
+}
+
+const connectToPeers = (userId: string, peerIds: string[]) => {
     peerIds.forEach(peerId => {
-        if (peerId === userId) {
+        if (peerId === userId || remoteStreams.has(peerId)) {
             return
         }
-        const sendMessage = (message: any) => {
-            pubnub.publish({
-                channel: `${userId}->${peerId}`,
-                message
-            })
-        }
-        let signals: any[] = []
-        let connected = false
-        const local = new Peer({ initiator: true, stream, trickle: false })
-        const remote = new Peer()
-        local.on("signal", data => {
-            if (connected) {
-                remote.signal(data)
-            } else {
-                signals.push(data)
-            }
-        })
-        remote.on("signal", data => {
-            local.signal(data)
-        })
-
-        const connectInterval = setInterval(
-            () => sendMessage("connected"),
-            1000
-        )
-        peerMessageHandlers.set(`${peerId}->${userId}`, data => {
-            if (data === "connected") {
-                if (!connected) {
-                    connected = true
-                    signals.forEach(data => {
-                        sendMessage(data)
-                    })
-                    signals = []
-                }
-            } else {
-                remote.signal(data)
-            }
-        })
-        local.on("connect", () => {
-            clearInterval(connectInterval)
-        })
-
         const getElement = () =>
             document.getElementById(`video-${peerId}`) as HTMLVideoElement
-        remote.on("stream", (stream: MediaStream) => {
-            remoteTracks.set(peerId, stream)
-            const element = getElement()
-            if (element && !element.srcObject) {
-                element.srcObject = stream
-            }
-        })
 
-        const removeStream = () => {
-            remoteTracks.delete(peerId)
+        connectToPeer(userId, peerId, () => {
+            remoteStreams.delete(peerId)
             const element = getElement()
             if (element && element.srcObject) {
                 element.srcObject = null
             }
-        }
-        remote.on("close", removeStream)
-        remote.on("error", removeStream)
-    })
-    pubnub.subscribe({
-        channels: peerIds.reduce((channels: string[], peerId) => {
-            // channels.push(`${userId}->${peerId}`)
-            channels.push(`${peerId}->${userId}`)
-            return channels
-        }, [])
+        }).then(({ remote }) => {
+            if (!remoteStreams.has(peerId)) {
+                remote.on("stream", (stream: MediaStream) => {
+                    remoteStreams.set(peerId, stream)
+                    const element = getElement()
+                    if (element && !element.srcObject) {
+                        element.srcObject = stream
+                    }
+                })
+                remote.addStream(localStream)
+            }
+        })
     })
 }
 
+let currentPeers: Set<string> = new Set([])
 export const VideoChat: FunctionComponent<VideoChatProps> = ({
     userId,
     peerIds
 }) => {
     useEffect(() => {
-        setupPubNub(userId)
-        setupVideoChat(userId, peerIds)
+        setupVideoChat()
     }, [])
+    useEffect(() => {
+        const newPeers = peerIds
+            .filter(pid => !currentPeers.has(pid))
+            .map(pid => {
+                currentPeers.add(pid)
+                return pid
+            })
+        if (newPeers.length) {
+            connectToPeers(userId, newPeers)
+        }
+    }, [peerIds])
     const setVideoEl = (id: string, ref: HTMLVideoElement | null) => {
-        const remoteTrack = remoteTracks.get(id)
-        if (ref && remoteTrack && !ref.srcObject) {
-            ref.srcObject = remoteTrack
+        const remoteStream = remoteStreams.get(id)
+        if (ref && remoteStream && !ref.srcObject) {
+            ref.srcObject = remoteStream
         }
     }
     const videoContainerRef = useRef<HTMLDivElement>(null)
