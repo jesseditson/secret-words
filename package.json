@@ -38,7 +38,7 @@
   "scripts": {
     "dev": "concurrently -r \"npm:type-check:watch\" \"npm:start\"",
     "start": "parcel ./src/index.html",
-    "build": "npm run type-check && parcel build ./src/index.html --public-url '/'",
+    "build": "npm run type-check && parcel build ./src/index.html --public-url '/' && cp _redirects dist/",
     "test": "jest",
     "test:watch": "jest --watch",
     "type-check": "tsc --noEmit",
