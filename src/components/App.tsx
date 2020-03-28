@@ -165,14 +165,16 @@ export const App: FunctionComponent<AppProps> = ({
                         />
                     )}
             </section>
-            {/* <section>
+            <section>
                 {appState.currentGame ? (
                     <VideoChat
-                        user={appState.currentUser!}
-                        players={Array.from(appState.currentPlayers!.values())}
+                        userId={appState.currentUser!._id}
+                        peerIds={Array.from(
+                            appState.currentPlayers!.values()
+                        ).map(p => p._id)}
                     />
                 ) : null}
-            </section> */}
+            </section>
         </div>
     )
 }

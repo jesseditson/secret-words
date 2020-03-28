@@ -5,8 +5,8 @@ import Peer from "simple-peer"
 import "./video-chat.scss"
 
 interface VideoChatProps {
-    user: User
-    players: User[]
+    userId: string
+    peerIds: string[]
 }
 
 let pubnub: PubNub
@@ -25,7 +25,6 @@ const setupPubNub = (uuid: string) => {
     })
     pubnub.addListener({
         message: async ({ channel, message }) => {
-            console.log(channel, peerMessageHandlers.has(channel))
             if (peerMessageHandlers.has(channel)) {
                 peerMessageHandlers.get(channel)!(message)
             }
@@ -34,7 +33,7 @@ const setupPubNub = (uuid: string) => {
 }
 
 const remoteTracks: Map<string, MediaStream> = new Map()
-const setupVideoChat = async (userId: string, peers: User[]) => {
+const setupVideoChat = async (userId: string, peerIds: string[]) => {
     const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
         audio: true
@@ -45,37 +44,54 @@ const setupVideoChat = async (userId: string, peers: User[]) => {
     if (localVideo && !localVideo.srcObject) {
         localVideo.srcObject = stream
     }
-    peers.forEach(peer => {
-        console.log(peer._id, userId)
-        if (peer._id === userId) {
+    console.log("setting up")
+    peerIds.forEach(peerId => {
+        if (peerId === userId) {
             return
         }
-        const localPeer = new Peer({ initiator: true, stream })
-        const channel = `${userId}->${peer._id}`
+        const peer = new Peer({ initiator: true, stream })
+        const channel = `${userId}->${peerId}`
         const sendMessage = (message: any) => {
-            console.log("sending to ", channel)
             pubnub.publish({
                 channel,
                 message
             })
         }
-        localPeer.on("signal", data => {
-            setTimeout(() => sendMessage(data), 5000)
+        let signals: any[] = []
+        let connected = false
+        peer.on("signal", data => {
+            signals.push(data)
         })
-        console.log("sub", `${peer._id}->${userId}`)
-        peerMessageHandlers.set(`${peer._id}->${userId}`, data => {
-            console.log(data)
-            localPeer.signal(data)
+        const connectInterval = setInterval(
+            () => sendMessage("connected"),
+            1000
+        )
+        peerMessageHandlers.set(`${peerId}->${userId}`, data => {
+            if (data === "connected") {
+                console.log("got connection from ", peerId)
+                if (!connected) {
+                    console.log(connected)
+                    clearInterval(connectInterval)
+                    connected = true
+                    signals.forEach(data => {
+                        sendMessage(data)
+                    })
+                    signals = []
+                }
+            } else {
+                console.log("got signal", peer)
+                peer.signal(data)
+            }
         })
 
-        localPeer.on("connect", () => {
+        peer.on("connect", () => {
             console.log("connected")
         })
 
-        localPeer.on("stream", (stream: MediaStream) => {
-            remoteTracks.set(peer._id, stream)
+        peer.on("stream", (stream: MediaStream) => {
+            remoteTracks.set(peerId, stream)
             const element = document.getElementById(
-                `video-${peer._id}`
+                `video-${peerId}`
             ) as HTMLVideoElement
             if (element && !element.srcObject) {
                 element.srcObject = stream
@@ -83,21 +99,21 @@ const setupVideoChat = async (userId: string, peers: User[]) => {
         })
     })
     pubnub.subscribe({
-        channels: peers.reduce((channels: string[], peer) => {
-            // channels.push(`${userId}->${peer._id}`)
-            channels.push(`${peer._id}->${userId}`)
+        channels: peerIds.reduce((channels: string[], peerId) => {
+            // channels.push(`${userId}->${peerId}`)
+            channels.push(`${peerId}->${userId}`)
             return channels
         }, [])
     })
 }
 
 export const VideoChat: FunctionComponent<VideoChatProps> = ({
-    user,
-    players
+    userId,
+    peerIds
 }) => {
     useEffect(() => {
-        setupPubNub(user._id)
-        setupVideoChat(user._id, players)
+        setupPubNub(userId)
+        setupVideoChat(userId, peerIds)
     }, [])
     const setVideoEl = (id: string, ref: HTMLVideoElement | null) => {
         const remoteTrack = remoteTracks.get(id)
@@ -106,7 +122,7 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
         }
     }
     const videoContainerRef = useRef<HTMLDivElement>(null)
-    const videoWidth = `${100 / players.length}%`
+    const videoWidth = `${100 / peerIds.length}%`
     return (
         <div id="video-chat">
             <div
@@ -120,17 +136,17 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
                 <div className="video" style={{ width: videoWidth }}>
                     <video id="local-video" autoPlay muted />
                 </div>
-                {players
-                    .filter(u => u._id !== user._id)
-                    .map(user => (
+                {peerIds
+                    .filter(id => id !== userId)
+                    .map(peerId => (
                         <div
                             className="video"
-                            key={user._id}
+                            key={peerId}
                             style={{ width: videoWidth }}
                         >
                             <video
-                                id={`video-${user._id}`}
-                                ref={ref => setVideoEl(user._id, ref)}
+                                id={`video-${peerId}`}
+                                ref={ref => setVideoEl(peerId, ref)}
                                 autoPlay
                             />
                         </div>
