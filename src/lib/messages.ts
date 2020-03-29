@@ -14,7 +14,10 @@ export enum Op {
     SET_GUESS_COUNT = "Set Guess Count",
     GUESS_TILE = "Guess Tile",
     FINISH_GUESSING = "Finish Guessing",
-    REROLL_BOARD = "Reroll Board"
+    REROLL_BOARD = "Reroll Board",
+    BECOME_INACTIVE = "Become Inactive",
+    ACTIVE_PING = "Active Ping",
+    ACTIVE_RESPOND = "Active Response"
 }
 
 export interface MessageData {

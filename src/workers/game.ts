@@ -7,7 +7,8 @@ import {
     Session,
     AppState,
     Tile,
-    GameState
+    GameState,
+    VideoChatInfo
 } from "../lib/types"
 import { v4 as uuid } from "uuid"
 import dictionary from "../data/dictionary.json"
@@ -134,6 +135,28 @@ const getState = async (userId: string): Promise<AppState> => {
             }
         }
     }
+    let videoChatInfo: VideoChatInfo | undefined = undefined
+    if (user && user.activeTime && currentPlayers) {
+        // Computed props
+        const peerIds: string[] = []
+        const initiatorMap: Map<string, boolean> = new Map()
+        const isInitiator = (peer: User) => {
+            // Just compare IDs since that'll be stable across un-synced nodes
+            return user._id < peer._id
+        }
+        // Create a list of all active users and a topology of who will initiate
+        currentPlayers.forEach(player => {
+            if (player._id !== userId && player.activeTime) {
+                peerIds.push(player._id)
+                initiatorMap.set(player._id, isInitiator(player))
+            }
+        })
+        videoChatInfo = {
+            userId: user._id,
+            peerIds,
+            initiatorMap
+        }
+    }
     const nextState = {
         games: games || [],
         currentUser: user,
@@ -141,7 +164,8 @@ const getState = async (userId: string): Promise<AppState> => {
         currentGame,
         currentGameTiles,
         currentPlayers,
-        initialized: true
+        initialized: true,
+        videoChatInfo
     }
     lastState = nextState
     return nextState
@@ -149,16 +173,17 @@ const getState = async (userId: string): Promise<AppState> => {
 
 // Operation handlers
 let initialized = false
-const initialize = async (userId: string) => {
+const initialize = (userId: string) => {
     if (initialized) {
         throw new Error("Double Initialized")
     }
     const updateState = (event: string) => async () => {
         const newState = await getState(userId)
+        console.log(`[${event}]`)
         debug(`[${event}] update state:`, newState)
         ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })
     }
-    setInterval(updateState("poll"), 5000)
+    // setInterval(updateState("poll"), 5000)
     gameDb
         .sync(`${REMOTE_URL}/games`, { live: true, retry: true })
         .on("change", updateState("sync-games"))
@@ -238,20 +263,24 @@ const joinGame = async (gameId: string, userId: string) => {
 }
 const showGame = async (gameId: string, userId: string) => {
     const session = await sessionDb.get<Session>(userId)
-    return sessionDb.put<Session>({
-        ...session,
-        currentGameId: gameId
-    })
+    if (gameId !== session.currentGameId) {
+        return sessionDb.put<Session>({
+            ...session,
+            currentGameId: gameId
+        })
+    }
 }
 const hideGame = async (userId: string) => {
     const session = await allow404(sessionDb.get<Session>(userId))
     if (!session) {
         return
     }
-    return sessionDb.put<Session>({
-        ...session,
-        currentGameId: undefined
-    })
+    if (session.currentGameId) {
+        return sessionDb.put<Session>({
+            ...session,
+            currentGameId: undefined
+        })
+    }
 }
 const changeTeam = async (gameId: string, userId: string, team: Team) => {
     const game = await gameDb.get<Game>(gameId)
@@ -365,6 +394,48 @@ const finishGuessing = async (gameId: string) => {
     })
 }
 
+// Session Management
+const ACTIVE_TIMEOUT = 500
+const ACTIVE_CHECK_INTERVAL = 3000
+const userCheckIntervals: Map<string, number> = new Map()
+const awaitingActiveResponse: Set<string> = new Set()
+const activeHandler = async (userId: string) => {
+    const user = await userDb.get<User>(userId)
+    userCheckIntervals.set(
+        userId,
+        // This `self` is ugly but node types change this signature in global scope.
+        // Preferable: ignore node types, but not sure how.
+        self.setInterval(() => checkUserActive(userId), ACTIVE_CHECK_INTERVAL)
+    )
+    return userDb.put<User>({
+        ...user,
+        activeTime: new Date().toISOString()
+    })
+}
+const setUserInactive = async (userId: string) => {
+    const user = await userDb.get<User>(userId)
+    clearTimeout(userCheckIntervals.get(userId))
+    userCheckIntervals.delete(userId)
+    return userDb.put<User>({
+        ...user,
+        activeTime: null
+    })
+}
+// TODO: does this matter? Aren't the workers going to get destroyed if the user closes the page?
+const respondUserActiveHandler = (userId: string) => {
+    awaitingActiveResponse.delete(userId)
+}
+const checkUserActive = (userId: string) => {
+    awaitingActiveResponse.add(userId)
+    ctx.postMessage({ op: Op.ACTIVE_PING })
+    setTimeout(async () => {
+        if (awaitingActiveResponse.has(userId)) {
+            // did not respond in time, set user to inactive
+            setUserInactive(userId)
+        }
+    }, ACTIVE_TIMEOUT)
+}
+
 // Route the messages to the handlers
 const handleMessage = async (
     e: GameMessageEvent<any>
@@ -374,6 +445,7 @@ const handleMessage = async (
     switch (op) {
         case Op.INITIALIZE:
             initialize(userId)
+            await activeHandler(userId)
             break
         case Op.CREATE_USER:
             await createUser({ _id: userId, ...data })
@@ -415,6 +487,14 @@ const handleMessage = async (
         case Op.FINISH_GUESSING:
             await finishGuessing(data.gameId)
             break
+        // Session Management Messages
+        // These do not trigger state updates
+        case Op.BECOME_INACTIVE:
+            await setUserInactive(userId)
+            return
+        case Op.ACTIVE_RESPOND:
+            await respondUserActiveHandler(userId)
+            return
     }
     const newState = await getState(userId)
     ctx.postMessage({ op: Op.UPDATE_STATE, data: newState })

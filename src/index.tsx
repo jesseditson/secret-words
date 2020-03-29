@@ -20,6 +20,10 @@ const worker = new Worker("./workers/game.ts")
 const sendMessage = (op: Op, data?: object) =>
     worker.postMessage({ userId, op, data })
 
+window.addEventListener("beforeunload", () => {
+    sendMessage(Op.BECOME_INACTIVE)
+})
+
 render(
     <App worker={worker} sendMessage={sendMessage} userId={userId} />,
     document.getElementById("root")

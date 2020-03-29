@@ -3,8 +3,10 @@ import "./video-chat.scss"
 import { connectToPeer } from "../lib/rtc-connections"
 
 interface VideoChatProps {
+    showLocal: boolean
     userId: string
     peerIds: string[]
+    initiatorMap: Map<string, boolean>
 }
 
 const remoteStreams: Map<string, MediaStream> = new Map()
@@ -23,7 +25,11 @@ const setupVideoChat = async () => {
     localStream = stream
 }
 
-const connectToPeers = (userId: string, peerIds: string[]) => {
+const connectToPeers = (
+    userId: string,
+    peerIds: string[],
+    initiatorMap: Map<string, boolean>
+) => {
     peerIds.forEach(peerId => {
         if (peerId === userId || remoteStreams.has(peerId)) {
             return
@@ -31,35 +37,41 @@ const connectToPeers = (userId: string, peerIds: string[]) => {
         const getElement = () =>
             document.getElementById(`video-${peerId}`) as HTMLVideoElement
 
-        connectToPeer(userId, peerId, () => {
+        connectToPeer(userId, peerId, initiatorMap.get(peerId)!, () => {
             remoteStreams.delete(peerId)
             const element = getElement()
             if (element && element.srcObject) {
                 element.srcObject = null
             }
-        }).then(({ remote }) => {
-            if (!remoteStreams.has(peerId)) {
-                remote.on("stream", (stream: MediaStream) => {
-                    remoteStreams.set(peerId, stream)
-                    const element = getElement()
-                    if (element && !element.srcObject) {
-                        element.srcObject = stream
-                    }
-                })
-                remote.addStream(localStream)
-            }
         })
+            .then(({ peer }) => {
+                if (!remoteStreams.has(peerId)) {
+                    peer.on("stream", (stream: MediaStream) => {
+                        remoteStreams.set(peerId, stream)
+                        const element = getElement()
+                        if (element && !element.srcObject) {
+                            element.srcObject = stream
+                        }
+                    })
+                    // peer.addStream(localStream)
+                }
+            })
+            .catch(error => {
+                console.error(`connection to ${peerId} failed:`, error.stack)
+            })
     })
 }
 
 let currentPeers: Set<string> = new Set([])
 export const VideoChat: FunctionComponent<VideoChatProps> = ({
+    showLocal,
     userId,
-    peerIds
+    peerIds,
+    initiatorMap
 }) => {
-    useEffect(() => {
-        setupVideoChat()
-    }, [])
+    // useEffect(() => {
+    //     setupVideoChat()
+    // }, [showLocal])
     useEffect(() => {
         const newPeers = peerIds
             .filter(pid => !currentPeers.has(pid))
@@ -68,7 +80,7 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
                 return pid
             })
         if (newPeers.length) {
-            connectToPeers(userId, newPeers)
+            connectToPeers(userId, newPeers, initiatorMap)
         }
     }, [peerIds])
     const setVideoEl = (id: string, ref: HTMLVideoElement | null) => {

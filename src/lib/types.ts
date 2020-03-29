@@ -31,6 +31,7 @@ export interface Game {
 export interface User {
     _id: string
     name: string
+    activeTime?: string | null
 }
 
 export interface Session {
@@ -49,6 +50,11 @@ export interface Tile {
 }
 
 // App Types
+export interface VideoChatInfo {
+    userId: string
+    peerIds: string[]
+    initiatorMap: Map<string, boolean>
+}
 export interface AppState {
     initialized: boolean
     games: Game[]
@@ -57,4 +63,5 @@ export interface AppState {
     currentGame?: Game
     currentPlayers?: Map<string, User>
     currentGameTiles?: Tile[]
+    videoChatInfo?: VideoChatInfo
 }

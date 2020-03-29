@@ -1,5 +1,5 @@
 import React, { FunctionComponent, useState, useEffect } from "react"
-import { AppState, GameState } from "../lib/types"
+import { AppState, GameState, User } from "../lib/types"
 import { GameMessageEvent, Op, AppMessage } from "../lib/messages"
 import { Games } from "./Games"
 import { Login } from "./Login"
@@ -34,10 +34,12 @@ export const App: FunctionComponent<AppProps> = ({
         worker.onmessage = async (msg: GameMessageEvent<AppMessage>) => {
             if (msg.data.op === Op.UPDATE_STATE) {
                 setAppState(cs => ({ ...cs, ...msg.data.data }))
+            } else if (msg.data.op === Op.ACTIVE_PING) {
+                sendMessage(Op.ACTIVE_RESPOND)
             }
         }
-        sendMessage(Op.INITIALIZE, { userId })
-    }, [worker, userId])
+        sendMessage(Op.INITIALIZE)
+    }, [worker])
     useEffect(() => {
         const gameMatch = window.location.pathname.match(GAME_MATCH)
         if (gameMatch) {
@@ -180,16 +182,16 @@ export const App: FunctionComponent<AppProps> = ({
                         />
                     )}
             </section>
-            {appState.currentGame && showingVC ? (
+            {appState.videoChatInfo && (
                 <section>
                     <VideoChat
-                        userId={appState.currentUser!._id}
-                        peerIds={Array.from(
-                            appState.currentPlayers!.values()
-                        ).map(p => p._id)}
+                        showLocal={showingVC}
+                        userId={appState.videoChatInfo.userId}
+                        peerIds={appState.videoChatInfo.peerIds}
+                        initiatorMap={appState.videoChatInfo.initiatorMap}
                     />
                 </section>
-            ) : null}
+            )}
         </div>
     )
 }
