@@ -182,7 +182,7 @@ export const App: FunctionComponent<AppProps> = ({
                         />
                     )}
             </section>
-            {appState.videoChatInfo && (
+            {appState.currentGame && appState.videoChatInfo && (
                 <section>
                     <VideoChat
                         showLocal={showingVC}

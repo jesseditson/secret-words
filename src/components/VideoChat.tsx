@@ -1,6 +1,6 @@
 import React, { FunctionComponent, useRef, useEffect } from "react"
 import "./video-chat.scss"
-import { connectToPeer } from "../lib/rtc-connections"
+import { connectToPeer, Connection } from "../lib/rtc-connections"
 
 interface VideoChatProps {
     showLocal: boolean
@@ -10,6 +10,7 @@ interface VideoChatProps {
 }
 
 const remoteStreams: Map<string, MediaStream> = new Map()
+const peerConnections: Map<string, Connection> = new Map()
 let localStream: MediaStream
 const setupVideoChat = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -23,6 +24,9 @@ const setupVideoChat = async () => {
         localVideo.srcObject = stream
     }
     localStream = stream
+    peerConnections.forEach(({ peer }) => {
+        peer.addStream(stream)
+    })
 }
 
 const connectToPeers = (
@@ -31,7 +35,7 @@ const connectToPeers = (
     initiatorMap: Map<string, boolean>
 ) => {
     peerIds.forEach(peerId => {
-        if (peerId === userId || remoteStreams.has(peerId)) {
+        if (remoteStreams.has(peerId)) {
             return
         }
         const getElement = () =>
@@ -44,16 +48,19 @@ const connectToPeers = (
                 element.srcObject = null
             }
         })
-            .then(({ peer }) => {
+            .then(connection => {
                 if (!remoteStreams.has(peerId)) {
-                    peer.on("stream", (stream: MediaStream) => {
+                    connection.peer.on("stream", (stream: MediaStream) => {
                         remoteStreams.set(peerId, stream)
                         const element = getElement()
                         if (element && !element.srcObject) {
                             element.srcObject = stream
                         }
                     })
-                    // peer.addStream(localStream)
+                    peerConnections.set(peerId, connection)
+                    if (localStream) {
+                        connection.peer.addStream(localStream)
+                    }
                 }
             })
             .catch(error => {
@@ -69,9 +76,11 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
     peerIds,
     initiatorMap
 }) => {
-    // useEffect(() => {
-    //     setupVideoChat()
-    // }, [showLocal])
+    useEffect(() => {
+        if (showLocal) {
+            setupVideoChat()
+        }
+    }, [showLocal])
     useEffect(() => {
         const newPeers = peerIds
             .filter(pid => !currentPeers.has(pid))

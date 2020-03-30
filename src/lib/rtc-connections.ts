@@ -1,6 +1,8 @@
 import Peer from "simple-peer"
 import PubNub from "pubnub"
 
+const READY_MESSAGE = "ready"
+
 let pubnub: PubNub
 const messageHandlers: Map<
     string,
@@ -34,7 +36,7 @@ const setupPubNub = (uuid: string) => {
     })
 }
 
-interface Connection {
+export interface Connection {
     rtcConnection: RTCPeerConnection
     peer: Peer.Instance
 }
@@ -68,10 +70,6 @@ export const connectToPeer = (
     const receiveChannel = `${peerId}:${localId}`
     const sendChannel = `${localId}:${peerId}`
     const sendMessage = (message: any) => {
-        console.log(
-            `send to ${sendChannel}`,
-            message.type || (message.candidate ? "candidate" : message)
-        )
         pubnub.publish({
             channel: sendChannel,
             message
@@ -82,29 +80,14 @@ export const connectToPeer = (
         channels: [receiveChannel, sendChannel],
         withPresence: true
     })
-    const peer = new Peer({
-        initiator,
-        trickle: false
-    })
-    const bufferedSignals: any[] = []
-    let ready = false
-    peer.on("signal", data => {
-        if (!ready) {
-            bufferedSignals.push(data)
-        } else {
-            sendMessage(data)
-        }
-    })
     return new Promise(resolve => {
-        const whenListening = () => {
-            console.log(`begin handshake with ${peerId}`)
-            console.log(`listen on ${receiveChannel}`)
-            messageHandlers.set(receiveChannel, data => {
-                console.log(
-                    "pubsub signal:",
-                    data.type || (data.candidate ? "candidate" : data)
-                )
-                peer.signal(data)
+        let peer: Peer.Instance | null = null
+        const setupPeer = () => {
+            peer = new Peer({
+                initiator
+            })
+            peer.on("signal", data => {
+                sendMessage(data)
             })
             const onDisconnect = (error?: Error) => {
                 console.log("DISCONNECTING")
@@ -120,40 +103,33 @@ export const connectToPeer = (
                 console.error(`rtc error for peer ${peerId}`, e)
                 onDisconnect()
             })
-            peer.on("connect", () => {
+            peer.once("connect", () => {
                 console.log(`connected to ${peerId}`)
                 // @ts-ignore
-                const rtcConnection = remote._pc as RTCPeerConnection
+                const rtcConnection = peer._pc as RTCPeerConnection
                 const connection = {
                     rtcConnection,
-                    peer
+                    peer: peer!
                 }
                 connections.byPeer.set(peerId, connection)
                 resolve(connection)
             })
-            // Kick it off
-            bufferedSignals.forEach(data => sendMessage(data))
-            ready = true
         }
-        const connectWhenReady = () => {
-            pubnub
-                .hereNow({
-                    channels: [`${sendChannel}`]
-                })
-                .then(({ channels: hereNow }) => {
-                    const alreadyListening = hereNow[
-                        sendChannel
-                    ].occupants.some(({ uuid }) => uuid === peerId)
-                    if (alreadyListening) {
-                        whenListening()
-                    } else {
-                        console.log(
-                            `waiting for a connection to ${sendChannel}...`
-                        )
-                        joinHandlers.set(`${sendChannel}`, whenListening)
-                    }
-                })
-        }
-        connectWhenReady()
+        console.log(`listen on ${receiveChannel}`)
+        messageHandlers.set(receiveChannel, data => {
+            if (data === READY_MESSAGE && !initiator) {
+                console.log(`preparing to receive offer from ${peerId}`)
+                sendMessage(READY_MESSAGE)
+            } else if (data === READY_MESSAGE && initiator) {
+                console.log(`${peerId} is ready, making offer`)
+                setupPeer()
+            } else {
+                if (!peer) {
+                    setupPeer()
+                }
+                peer!.signal(data)
+            }
+        })
+        sendMessage(READY_MESSAGE)
     })
 }
