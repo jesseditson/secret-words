@@ -1,4 +1,4 @@
-import React, { FunctionComponent, useRef, useEffect } from "react"
+import React, { FunctionComponent, useRef, useEffect, useState } from "react"
 import "./video-chat.scss"
 import { connectToPeer, Connection } from "../lib/rtc-connections"
 
@@ -76,6 +76,7 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
     peerIds,
     initiatorMap
 }) => {
+    const [isHidden, setIsHidden] = useState(true)
     useEffect(() => {
         if (showLocal) {
             setupVideoChat()
@@ -100,17 +101,34 @@ export const VideoChat: FunctionComponent<VideoChatProps> = ({
     }
     const videoContainerRef = useRef<HTMLDivElement>(null)
     const videoWidth = `${100 / peerIds.length}%`
+    const videoHeight =
+        videoContainerRef.current?.getBoundingClientRect().height || 200
+    console.log(isHidden)
     return (
         <div id="video-chat">
             <div
                 className="spacer"
                 style={{
-                    height: videoContainerRef.current?.getBoundingClientRect()
-                        .height
+                    height: videoHeight
                 }}
             />
-            <div className="videos" ref={videoContainerRef}>
-                <div className="video" style={{ width: videoWidth }}>
+            <div
+                className="videos"
+                ref={videoContainerRef}
+                style={{ bottom: isHidden ? -videoHeight : 0 }}
+            >
+                <div
+                    onClick={() => setIsHidden(!isHidden)}
+                    className="hide-tab"
+                >
+                    🎥
+                </div>
+                <div
+                    className="video"
+                    style={{
+                        width: videoWidth
+                    }}
+                >
                     <video id="local-video" autoPlay muted />
                 </div>
                 {peerIds

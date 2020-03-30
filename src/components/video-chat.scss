@@ -5,14 +5,28 @@
         width: 100%;
     }
     .videos {
+        .hide-tab {
+            cursor: pointer;
+            position: absolute;
+            width: 3em;
+            height: 1.5em;
+            background-color: #f2f2f2;
+            border-radius: 4px 4px 0 0;
+            top: -1.5em;
+            left: 1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         background-color: black;
         position: fixed;
-        bottom: 0;
+        bottom: -200px;
         left: 0;
         right: 0;
         display: flex;
         max-height: 200px;
         .video {
+            border: 1px solid #ccc;
             flex: 1;
             video {
                 width: 100%;
